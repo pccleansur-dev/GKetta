@@ -1,36 +1,122 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Sistema Kettal
 
-## Getting Started
+Panel interno para clientes, cuentas corrientes, pedidos, ventas, caja y usuarios.
 
-First, run the development server:
+## Stack
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- `Next.js 16`
+- `React 19`
+- `Prisma`
+- `PostgreSQL 16`
+- `Docker Compose`
+
+## Uso recomendado
+
+### 1. Verificar entorno
+
+```powershell
+pnpm setup:check
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Levantar el sistema
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```powershell
+docker compose up -d --build
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 3. Abrir la app
 
-## Learn More
+```text
+http://localhost:3017
+```
 
-To learn more about Next.js, take a look at the following resources:
+En una instalacion limpia, el sistema redirige automaticamente a `/setup`.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Instalacion inicial
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+En el primer arranque no hay datos operativos cargados.
 
-## Deploy on Vercel
+Estado inicial esperado:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- 1 usuario: `admin`
+- 0 clientes
+- 0 pedidos
+- 0 ventas
+- 0 movimientos de caja
+- 0 sesiones
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Durante el setup se define:
+
+- nombre del negocio
+- contrasena del administrador
+- carpeta de backups
+- retencion de backups
+
+Despues del setup, el resto de los usuarios se crean desde la pantalla `Usuarios`.
+
+## Acceso inicial
+
+| Usuario | Contrasena | Rol |
+|---|---|---|
+| `admin` | `admin1234` | Administrador |
+
+La contrasena se reemplaza en el wizard de configuracion inicial.
+
+## Desarrollo local
+
+### Arranque limpio
+
+```powershell
+Copy-Item .env.example .env
+pnpm install
+docker compose up -d postgres
+pnpm db:setup
+pnpm dev
+```
+
+Abrir `http://localhost:3000`.
+
+## Variables de entorno
+
+El archivo `.env.example` incluye valores de desarrollo para correr localmente.
+
+Variables principales:
+
+| Variable | Uso |
+|---|---|
+| `DATABASE_URL` | Conexion a Postgres |
+| `POSTGRES_DB` | Nombre de la base |
+| `POSTGRES_USER` | Usuario de Postgres |
+| `POSTGRES_PASSWORD` | Password de Postgres para entorno local |
+
+## Backups
+
+- El sistema guarda backups automaticos todos los dias a las `00:00`.
+- En Docker se usa la carpeta `./backups/` del proyecto.
+- Si esa carpeta esta dentro de OneDrive, Dropbox o similar, los backups tambien quedan sincronizados fuera de la app.
+- La deteccion de "ruta de nube" en el setup es solo una ayuda visual basada en el nombre de la carpeta.
+
+## Scripts
+
+| Script | Descripcion |
+|---|---|
+| `pnpm setup:check` | Verifica entorno local |
+| `pnpm dev` | Levanta la app en desarrollo |
+| `pnpm build` | Build de produccion |
+| `pnpm lint` | ESLint |
+| `pnpm test` | Vitest |
+| `pnpm db:generate` | Genera cliente Prisma |
+| `pnpm db:push` | Sincroniza esquema |
+| `pnpm db:seed` | Crea el usuario inicial |
+| `pnpm db:setup` | `db:generate` + `db:push` + `db:seed` |
+
+## GitHub
+
+Antes de subir el repo:
+
+- no subir `.env`
+- no subir `backups/`
+- no subir `.playwright-mcp/`
+- no subir screenshots locales de QA
+
+La configuracion actual de `.gitignore` ya cubre esos casos.

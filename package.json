@@ -1,26 +1,48 @@
 {
-  "name": "sistema-kettal-app",
-  "version": "0.1.0",
-  "private": true,
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
-  },
-  "dependencies": {
-    "next": "16.2.6",
-    "react": "19.2.4",
-    "react-dom": "19.2.4"
-  },
-  "devDependencies": {
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "eslint": "^9",
-    "eslint-config-next": "16.2.6",
-    "tailwindcss": "^4",
-    "typescript": "^5"
-  }
+    "name": "sistema-kettal",
+    "version": "0.1.0",
+    "private": true,
+    "packageManager": "pnpm@10.28.0",
+    "pnpm": {
+        "onlyBuiltDependencies": [
+            "@prisma/client",
+            "@prisma/engines",
+            "prisma",
+            "sharp",
+            "unrs-resolver"
+        ]
+    },
+    "scripts": {
+        "dev": "next dev",
+        "build": "next build",
+        "start": "next start",
+        "lint": "eslint",
+        "db:generate": "prisma generate",
+        "db:push": "prisma db push",
+        "db:setup": "pnpm db:generate && pnpm db:push && pnpm db:seed",
+        "db:studio": "prisma studio",
+        "db:seed": "node prisma/seed.mjs",
+        "docker:start": "pnpm db:setup && pnpm start",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "setup:check": "node scripts/setup-check.mjs"
+    },
+    "dependencies": {
+        "@prisma/client": "^6.16.3",
+        "next": "16.2.6",
+        "react": "19.2.4",
+        "react-dom": "19.2.4"
+    },
+    "devDependencies": {
+        "@tailwindcss/postcss": "^4",
+        "@types/node": "^20",
+        "@types/react": "^19",
+        "@types/react-dom": "^19",
+        "eslint": "^9",
+        "eslint-config-next": "16.2.6",
+        "prisma": "^6.16.3",
+        "tailwindcss": "^4",
+        "typescript": "^5",
+        "vitest": "^4.1.6"
+    }
 }

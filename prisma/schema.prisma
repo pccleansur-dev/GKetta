@@ -1,0 +1,317 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  owner
+  manager
+  staff
+}
+
+enum AccountStatus {
+  active
+  settled
+  overdue
+  paused
+}
+
+enum MovementType {
+  charge
+  payment
+  adjustment
+  forgiven
+}
+
+enum PaymentMethod {
+  cash
+  transfer
+  card
+  mixed
+}
+
+enum OrderStatus {
+  pending
+  confirmed
+  in_progress
+  ready
+  delivered
+  cancelled
+}
+
+enum PaymentConfirmationStatus {
+  pending
+  confirmed
+  rejected
+}
+
+enum SaleCategory {
+  local
+  pedido
+  cuenta_corriente
+  otros
+}
+
+enum CashMovementType {
+  income
+  expense
+  adjustment
+}
+
+enum CashMovementSource {
+  sale
+  payment
+  manual
+  withdrawal
+  deposit
+}
+
+enum ReminderType {
+  overdue
+  upcoming_due
+  manual
+}
+
+model User {
+  id                     String            @id @default(uuid()) @db.Uuid
+  email                  String            @unique
+  fullName               String            @map("full_name")
+  role                   UserRole
+  isActive               Boolean           @default(true) @map("is_active")
+  passwordHash           String?           @map("password_hash")
+  passwordUpdatedAt      DateTime?         @map("password_updated_at")
+  createdAt              DateTime          @default(now()) @map("created_at")
+  updatedAt              DateTime          @updatedAt @map("updated_at")
+  accountMovements       AccountMovement[]
+  orders                 Order[]
+  orderReceipts          OrderReceipt[]
+  sales                  Sale[]
+  openedCashSessions     CashSession[]     @relation("CashSessionOpenedBy")
+  closedCashSessions     CashSession[]     @relation("CashSessionClosedBy")
+  cashMovements          CashMovement[]
+  reminderLogs           ReminderLog[]
+  auditLogs              AuditLog[]
+  sessions               Session[]
+
+  @@map("users")
+}
+
+model Session {
+  id         String   @id @default(uuid()) @db.Uuid
+  tokenHash  String   @unique @map("token_hash")
+  userId     String   @map("user_id") @db.Uuid
+  expiresAt  DateTime @map("expires_at")
+  lastUsedAt DateTime @default(now()) @map("last_used_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "idx_sessions_user_id")
+  @@index([expiresAt], map: "idx_sessions_expires_at")
+  @@map("sessions")
+}
+
+model Customer {
+  id              String           @id @default(uuid()) @db.Uuid
+  fullName        String           @map("full_name")
+  phone           String?
+  documentNumber  String?          @map("document_number")
+  notes           String?
+  isTrusted       Boolean          @default(true) @map("is_trusted")
+  monthlyDueDay   Int?             @map("monthly_due_day")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+  deletedAt       DateTime?        @map("deleted_at")
+  accounts        CustomerAccount[]
+  accountMovements AccountMovement[]
+  orders          Order[]
+  sales           Sale[]
+  reminderLogs    ReminderLog[]
+
+  @@map("customers")
+}
+
+model CustomerAccount {
+  id              String            @id @default(uuid()) @db.Uuid
+  customerId      String            @map("customer_id") @db.Uuid
+  status          AccountStatus
+  openedAt        DateTime          @default(now()) @map("opened_at")
+  dueDate         DateTime?         @map("due_date") @db.Date
+  currentBalance  Decimal           @default(0) @map("current_balance") @db.Decimal(12, 2)
+  creditLimit     Decimal?          @map("credit_limit") @db.Decimal(12, 2)
+  notes           String?
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+  deletedAt       DateTime?         @map("deleted_at")
+  customer        Customer          @relation(fields: [customerId], references: [id])
+  movements       AccountMovement[]
+  reminders       ReminderLog[]
+
+  @@index([customerId], map: "idx_customer_accounts_customer_id")
+  @@index([status, dueDate], map: "idx_customer_accounts_status_due_date")
+  @@map("customer_accounts")
+}
+
+model AccountMovement {
+  id                     String         @id @default(uuid()) @db.Uuid
+  accountId              String         @map("account_id") @db.Uuid
+  customerId             String         @map("customer_id") @db.Uuid
+  movementType           MovementType   @map("movement_type")
+  amount                 Decimal        @db.Decimal(12, 2)
+  paymentMethod          PaymentMethod? @map("payment_method")
+  movementDate           DateTime       @default(now()) @map("movement_date")
+  description            String
+  referenceNote          String?        @map("reference_note")
+  createdBy              String         @map("created_by") @db.Uuid
+  createdAt              DateTime       @default(now()) @map("created_at")
+  account                CustomerAccount @relation(fields: [accountId], references: [id])
+  customer               Customer       @relation(fields: [customerId], references: [id])
+  user                   User           @relation(fields: [createdBy], references: [id])
+  cashMovements          CashMovement[]
+
+  @@index([accountId], map: "idx_account_movements_account_id")
+  @@index([customerId, movementDate(sort: Desc)], map: "idx_account_movements_customer_id_date")
+  @@map("account_movements")
+}
+
+model Order {
+  id                        String                      @id @default(uuid()) @db.Uuid
+  customerId                String                      @map("customer_id") @db.Uuid
+  productName               String                      @map("product_name")
+  totalAmount               Decimal                     @map("total_amount") @db.Decimal(12, 2)
+  depositAmount             Decimal                     @default(0) @map("deposit_amount") @db.Decimal(12, 2)
+  remainingBalance          Decimal                     @default(0) @map("remaining_balance") @db.Decimal(12, 2)
+  status                    OrderStatus
+  deliveryDate              DateTime?                   @map("delivery_date") @db.Date
+  notes                     String?
+  paymentConfirmationStatus PaymentConfirmationStatus   @default(pending) @map("payment_confirmation_status")
+  createdBy                 String                      @map("created_by") @db.Uuid
+  createdAt                 DateTime                    @default(now()) @map("created_at")
+  updatedAt                 DateTime                    @updatedAt @map("updated_at")
+  customer                  Customer                    @relation(fields: [customerId], references: [id])
+  user                      User                        @relation(fields: [createdBy], references: [id])
+  receipts                  OrderReceipt[]
+  sales                     Sale[]
+
+  @@index([customerId], map: "idx_orders_customer_id")
+  @@index([status, deliveryDate], map: "idx_orders_status_delivery_date")
+  @@map("orders")
+}
+
+model OrderReceipt {
+  id          String   @id @default(uuid()) @db.Uuid
+  orderId     String   @map("order_id") @db.Uuid
+  storagePath String   @map("storage_path")
+  fileName    String   @map("file_name")
+  mimeType    String   @map("mime_type")
+  uploadedBy  String   @map("uploaded_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [uploadedBy], references: [id])
+
+  @@map("order_receipts")
+}
+
+model Sale {
+  id                String         @id @default(uuid()) @db.Uuid
+  saleDate          DateTime       @map("sale_date") @db.Date
+  description       String
+  category          SaleCategory
+  amount            Decimal        @db.Decimal(12, 2)
+  paymentMethod     PaymentMethod  @map("payment_method")
+  relatedCustomerId String?        @map("related_customer_id") @db.Uuid
+  relatedOrderId    String?        @map("related_order_id") @db.Uuid
+  notes             String?
+  createdBy         String         @map("created_by") @db.Uuid
+  createdAt         DateTime       @default(now()) @map("created_at")
+  customer          Customer?      @relation(fields: [relatedCustomerId], references: [id])
+  order             Order?         @relation(fields: [relatedOrderId], references: [id])
+  user              User           @relation(fields: [createdBy], references: [id])
+  cashMovements     CashMovement[]
+
+  @@index([saleDate(sort: Desc)], map: "idx_sales_sale_date")
+  @@map("sales")
+}
+
+model CashSession {
+  id               String         @id @default(uuid()) @db.Uuid
+  sessionDate      DateTime       @unique @map("session_date") @db.Date
+  openingAmount    Decimal        @default(0) @map("opening_amount") @db.Decimal(12, 2)
+  closingAmount    Decimal?       @map("closing_amount") @db.Decimal(12, 2)
+  expectedAmount   Decimal        @default(0) @map("expected_amount") @db.Decimal(12, 2)
+  differenceAmount Decimal        @default(0) @map("difference_amount") @db.Decimal(12, 2)
+  notes            String?
+  openedBy         String         @map("opened_by") @db.Uuid
+  closedBy         String?        @map("closed_by") @db.Uuid
+  closedAt         DateTime?      @map("closed_at")
+  createdAt        DateTime       @default(now()) @map("created_at")
+  openedByUser     User           @relation("CashSessionOpenedBy", fields: [openedBy], references: [id])
+  closedByUser     User?          @relation("CashSessionClosedBy", fields: [closedBy], references: [id])
+  cashMovements    CashMovement[]
+
+  @@index([sessionDate(sort: Desc)], map: "idx_cash_sessions_session_date")
+  @@map("cash_sessions")
+}
+
+model CashMovement {
+  id                      String              @id @default(uuid()) @db.Uuid
+  cashSessionId           String              @map("cash_session_id") @db.Uuid
+  movementType            CashMovementType    @map("movement_type")
+  source                  CashMovementSource
+  amount                  Decimal             @db.Decimal(12, 2)
+  paymentMethod           PaymentMethod       @map("payment_method")
+  description             String
+  relatedSaleId           String?             @map("related_sale_id") @db.Uuid
+  relatedAccountMovementId String?            @map("related_account_movement_id") @db.Uuid
+  createdBy               String              @map("created_by") @db.Uuid
+  createdAt               DateTime            @default(now()) @map("created_at")
+  cashSession             CashSession         @relation(fields: [cashSessionId], references: [id], onDelete: Cascade)
+  sale                    Sale?               @relation(fields: [relatedSaleId], references: [id])
+  accountMovement         AccountMovement?    @relation(fields: [relatedAccountMovementId], references: [id])
+  user                    User                @relation(fields: [createdBy], references: [id])
+
+  @@index([cashSessionId], map: "idx_cash_movements_cash_session_id")
+  @@map("cash_movements")
+}
+
+model ReminderLog {
+  id             String         @id @default(uuid()) @db.Uuid
+  customerId     String         @map("customer_id") @db.Uuid
+  accountId      String         @map("account_id") @db.Uuid
+  reminderType   ReminderType   @map("reminder_type")
+  whatsappLink   String         @map("whatsapp_link")
+  messagePreview String         @map("message_preview")
+  createdBy      String         @map("created_by") @db.Uuid
+  createdAt      DateTime       @default(now()) @map("created_at")
+  customer       Customer       @relation(fields: [customerId], references: [id])
+  account        CustomerAccount @relation(fields: [accountId], references: [id])
+  user           User           @relation(fields: [createdBy], references: [id])
+
+  @@index([customerId], map: "idx_reminder_logs_customer_id")
+  @@map("reminder_logs")
+}
+
+model SystemConfig {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("system_config")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  actorUserId String   @map("actor_user_id") @db.Uuid
+  entityName  String   @map("entity_name")
+  entityId    String   @map("entity_id") @db.Uuid
+  action      String
+  payload     Json     @default("{}")
+  createdAt   DateTime @default(now()) @map("created_at")
+  user        User     @relation(fields: [actorUserId], references: [id])
+
+  @@index([entityName, entityId], map: "idx_audit_logs_entity")
+  @@map("audit_logs")
+}
