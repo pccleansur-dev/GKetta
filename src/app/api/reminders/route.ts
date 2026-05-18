@@ -2,7 +2,7 @@ import { ReminderType } from "@prisma/client";
 
 import { db } from "@/lib/db";
 import { requireApiUser } from "@/server/api/auth";
-import { asRequiredString, readJson } from "@/server/api/request";
+import { asOptionalString, asRequiredString, readJson } from "@/server/api/request";
 import { created, handleApiError, ok } from "@/server/api/responses";
 import { getRemindersData } from "@/server/queries";
 
@@ -19,7 +19,7 @@ export async function POST(request: Request) {
   try {
     const user = await requireApiUser();
     const body = await readJson<Record<string, unknown>>(request);
-    const accountId = asRequiredString(body.accountId, "la cuenta");
+    const accountId = asOptionalString(body.accountId) || undefined;
     const customerId = asRequiredString(body.customerId, "el cliente");
     const whatsappLink = asRequiredString(body.whatsappLink, "el enlace");
     const messagePreview = asRequiredString(body.messagePreview, "el mensaje");

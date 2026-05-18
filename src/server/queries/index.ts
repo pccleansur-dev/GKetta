@@ -128,6 +128,8 @@ function mapPaymentMethod(method: PaymentMethod) {
       return "tarjeta" as const;
     case PaymentMethod.mixed:
       return "mixto" as const;
+    case PaymentMethod.account:
+      return "a cuenta" as const;
     default:
       return "efectivo" as const;
   }
@@ -157,15 +159,33 @@ function normalizePhone(phone: string | null) {
   return phone.replace(/\D/g, "");
 }
 
-function reminderMessage(customerName: string, balance: number) {
-  return `Hola ${customerName}, te escribimos de Kettal para recordarte tu saldo pendiente de ${new Intl.NumberFormat(
-    "es-AR",
-    {
-      style: "currency",
-      currency: "ARS",
-      maximumFractionDigits: 0,
-    },
-  ).format(balance)}.`;
+function reminderMessage(customerName: string, balance: number, status: "vencida" | "por vencer" | "al dia") {
+  const amount = new Intl.NumberFormat("es-AR", {
+    style: "currency",
+    currency: "ARS",
+    maximumFractionDigits: 0,
+  }).format(balance);
+
+  if (status === "vencida") {
+    return `Hola ${customerName}, te contactamos desde Kettal para avisarte que tu saldo de ${amount} está vencido. Te pedimos que te comuniques a la brevedad para regularizarlo.`;
+  }
+
+  if (status === "por vencer") {
+    return `Hola ${customerName}, te recordamos desde Kettal que tenés un saldo pendiente de ${amount} que vence en los próximos días.`;
+  }
+
+  return `Hola ${customerName}, te escribimos de Kettal para recordarte tu saldo pendiente de ${amount}.`;
+}
+
+function relativeTime(date: Date): string {
+  const days = Math.floor((Date.now() - date.getTime()) / (1000 * 60 * 60 * 24));
+  if (days === 0) return "hoy";
+  if (days === 1) return "ayer";
+  if (days < 7) return `hace ${days} días`;
+  if (days < 14) return "hace 1 semana";
+  if (days < 30) return `hace ${Math.floor(days / 7)} semanas`;
+  if (days < 60) return "hace 1 mes";
+  return `hace ${Math.floor(days / 30)} meses`;
 }
 
 function getAuditEntityLabel(entityName: string) {
@@ -398,7 +418,7 @@ export async function getDashboardData() {
         id: account.id,
         customer: account.customer.fullName,
         phone: normalizePhone(account.customer.phone),
-        message: reminderMessage(account.customer.fullName, balance),
+        message: reminderMessage(account.customer.fullName, balance, "vencida"),
         balance,
       };
     }),
@@ -605,19 +625,27 @@ export async function getSalesData() {
   });
 
   return sales.map((sale) => {
-    const payments =
-      sale.cashMovements.length > 0
-        ? sale.cashMovements.map((movement) => ({
-            method: mapPaymentMethod(movement.paymentMethod),
-            amount: toNumber(movement.amount),
-          }))
-        : [{ method: mapPaymentMethod(sale.paymentMethod), amount: toNumber(sale.amount) }];
+    const saleAmount = toNumber(sale.amount);
+    const cashTotal = sale.cashMovements.reduce((sum, m) => sum + toNumber(m.amount), 0);
+    const accountPortion = Math.round((saleAmount - cashTotal) * 100) / 100;
+
+    let payments: { method: string; amount: number }[];
+    if (sale.cashMovements.length === 0) {
+      payments = [{ method: mapPaymentMethod(sale.paymentMethod), amount: saleAmount }];
+    } else if (accountPortion > 0.01) {
+      payments = [
+        ...sale.cashMovements.map((m) => ({ method: mapPaymentMethod(m.paymentMethod), amount: toNumber(m.amount) })),
+        { method: "a cuenta", amount: accountPortion },
+      ];
+    } else {
+      payments = sale.cashMovements.map((m) => ({ method: mapPaymentMethod(m.paymentMethod), amount: toNumber(m.amount) }));
+    }
 
     return {
       id: sale.id,
       date: formatLongDate(sale.saleDate),
       description: sale.description,
-      amount: toNumber(sale.amount),
+      amount: saleAmount,
       method: mapPaymentMethod(sale.paymentMethod),
       payments,
     };
@@ -753,31 +781,59 @@ export async function getAuditLogsData(filters?: {
   };
 }
 
-export async function getRemindersData() {
+export async function getRemindersData(lastPurchaseFilter?: string) {
   const accounts = await db.customerAccount.findMany({
-    where: {
-      deletedAt: null,
-      currentBalance: {
-        gt: 0,
+    where: { deletedAt: null, currentBalance: { gt: 0 } },
+    include: {
+      customer: {
+        include: {
+          sales: { orderBy: { saleDate: "desc" }, take: 1, select: { saleDate: true } },
+          reminderLogs: { orderBy: { createdAt: "desc" }, take: 1, select: { createdAt: true } },
+        },
       },
+      movements: { orderBy: { movementDate: "desc" }, take: 1, select: { movementDate: true } },
     },
-    include: { customer: true },
     orderBy: [{ dueDate: "asc" }, { currentBalance: "desc" }],
-    take: 12,
   });
+
+  const cutoffs: Record<string, number> = { week: 7, month: 30, old: 30, "3months": 90 };
 
   return accounts
     .map((account) => {
       const balance = toNumber(account.currentBalance);
+      const status = mapAccountStatus(account.status, account.dueDate, balance);
+
+      const lastSale = account.customer.sales[0]?.saleDate ?? null;
+      const lastPayment = account.movements[0]?.movementDate ?? null;
+      const lastReminder = account.customer.reminderLogs[0]?.createdAt ?? null;
+
+      const contactDates = [lastSale, lastPayment, lastReminder].filter(Boolean) as Date[];
+      const lastContactDate = contactDates.length
+        ? new Date(Math.max(...contactDates.map((d) => d.getTime())))
+        : null;
+
       return {
         id: account.id,
         customerId: account.customerId,
         customer: account.customer.fullName,
         phone: normalizePhone(account.customer.phone),
-        message: reminderMessage(account.customer.fullName, balance),
+        message: reminderMessage(account.customer.fullName, balance, status),
         balance,
-        status: mapAccountStatus(account.status, account.dueDate, balance),
+        status,
+        lastContact: lastContactDate ? relativeTime(lastContactDate) : null,
+        lastSaleDaysAgo: lastSale
+          ? Math.floor((Date.now() - lastSale.getTime()) / (1000 * 60 * 60 * 24))
+          : null,
       };
     })
-    .filter((account) => account.status !== "al dia");
+    .filter((account) => account.status !== "al dia")
+    .filter((account) => {
+      if (!lastPurchaseFilter || lastPurchaseFilter === "all") return true;
+      const days = account.lastSaleDaysAgo;
+      if (lastPurchaseFilter === "week") return days !== null && days <= 7;
+      if (lastPurchaseFilter === "month") return days !== null && days <= 30;
+      if (lastPurchaseFilter === "old") return days === null || days > cutoffs.old;
+      if (lastPurchaseFilter === "3months") return days === null || days > cutoffs["3months"];
+      return true;
+    });
 }

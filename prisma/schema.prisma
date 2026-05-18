@@ -32,6 +32,7 @@ enum PaymentMethod {
   transfer
   card
   mixed
+  account
 }
 
 enum OrderStatus {
@@ -278,17 +279,17 @@ model CashMovement {
 }
 
 model ReminderLog {
-  id             String         @id @default(uuid()) @db.Uuid
-  customerId     String         @map("customer_id") @db.Uuid
-  accountId      String         @map("account_id") @db.Uuid
-  reminderType   ReminderType   @map("reminder_type")
-  whatsappLink   String         @map("whatsapp_link")
-  messagePreview String         @map("message_preview")
-  createdBy      String         @map("created_by") @db.Uuid
-  createdAt      DateTime       @default(now()) @map("created_at")
-  customer       Customer       @relation(fields: [customerId], references: [id])
-  account        CustomerAccount @relation(fields: [accountId], references: [id])
-  user           User           @relation(fields: [createdBy], references: [id])
+  id             String          @id @default(uuid()) @db.Uuid
+  customerId     String          @map("customer_id") @db.Uuid
+  accountId      String?         @map("account_id") @db.Uuid
+  reminderType   ReminderType    @map("reminder_type")
+  whatsappLink   String          @map("whatsapp_link")
+  messagePreview String          @map("message_preview")
+  createdBy      String          @map("created_by") @db.Uuid
+  createdAt      DateTime        @default(now()) @map("created_at")
+  customer       Customer        @relation(fields: [customerId], references: [id])
+  account        CustomerAccount? @relation(fields: [accountId], references: [id])
+  user           User            @relation(fields: [createdBy], references: [id])
 
   @@index([customerId], map: "idx_reminder_logs_customer_id")
   @@map("reminder_logs")

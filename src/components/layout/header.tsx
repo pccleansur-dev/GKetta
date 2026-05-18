@@ -1,37 +1,37 @@
 import Link from "next/link";
 
+import { VentaSplitButton } from "@/components/layout/venta-split-button";
 import type { SessionUser } from "@/lib/session";
 
-export function Header({ currentUser }: { currentUser: SessionUser }) {
+export function Header({ currentUser, businessName = "Sistema Kettal" }: { currentUser: SessionUser; businessName?: string }) {
   const canCreateCustomers = currentUser.role === "owner" || currentUser.role === "manager";
 
   return (
     <header className="surface executive-card rounded-[28px] px-5 py-5 sm:px-6">
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="section-kicker">Panel administrativo</p>
+          <p className="mt-2 text-xl font-semibold tracking-[-0.03em] text-[var(--text-primary)] sm:text-2xl">
+            {businessName}
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
           {canCreateCustomers ? (
             <Link
               href="/clientes?panel=new"
-              className="rounded-full border border-[var(--border-soft)] bg-[var(--surface-muted)] px-4 py-3 text-center text-sm font-semibold text-[var(--text-primary)] transition hover:border-[var(--border-strong)] hover:bg-[var(--surface-strong)]"
+              className="rounded-[18px] border border-[var(--border-soft)] bg-[var(--surface-muted)] px-4 py-2.5 text-sm font-semibold text-[var(--text-primary)] transition hover:border-[var(--border-strong)] hover:bg-[var(--surface-strong)]"
             >
               Nuevo cliente
             </Link>
           ) : (
-            <div className="rounded-full border border-[var(--border-soft)] bg-[var(--surface-muted)] px-4 py-3 text-center text-sm font-semibold text-[var(--text-muted)]">
+            <span className="rounded-[18px] border border-[var(--border-soft)] px-4 py-2.5 text-sm font-semibold text-[var(--text-muted)] opacity-50">
               Nuevo cliente
-            </div>
+            </span>
           )}
-          <Link
-            href="/ventas?panel=new"
-            className="rounded-full border border-[var(--border-soft)] bg-[var(--surface-muted)] px-4 py-3 text-center text-sm font-semibold text-[var(--text-primary)] transition hover:border-[var(--border-strong)] hover:bg-[var(--surface-strong)]"
-          >
-            Registrar venta
-          </Link>
-          <Link
-            href="/pedidos?panel=new"
-            className="rounded-full bg-[var(--primary)] px-4 py-3 text-center text-sm font-semibold text-white shadow-[0_18px_35px_rgba(45,76,57,0.3)] transition hover:bg-[var(--primary-dark)]"
-          >
-            Cargar pedido
-          </Link>
+
+          <VentaSplitButton />
+        </div>
       </div>
     </header>
   );

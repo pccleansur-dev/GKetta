@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { KpiCard, SectionCard } from "@/components/dashboard/cards";
+import { CloseCashButton } from "@/components/cash/close-cash-button";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { getDashboardData } from "@/server/queries";
 import { formatCurrency, statusLabel, statusPill } from "@/lib/format";
@@ -123,9 +124,7 @@ export default async function Home() {
               <p className="mt-2 text-3xl font-semibold tracking-[-0.04em]">
                 {formatCurrency(cashSnapshot.expected)}
               </p>
-              <button className="mt-4 rounded-full bg-[var(--text-primary)] px-4 py-3 text-sm font-semibold text-[var(--background)] transition hover:bg-[#ffffff]">
-                Cerrar caja
-              </button>
+              <CloseCashButton expectedAmount={cashSnapshot.expected} />
             </div>
           </SectionCard>
         </section>

@@ -11,6 +11,7 @@ import {
 } from "@prisma/client";
 
 import { db } from "@/lib/db";
+import { ensureTodayCashSession, startOfToday, endOfDay } from "@/lib/cash-session";
 import { requireApiUser, requireRole } from "@/server/api/auth";
 import { ApiError } from "@/server/api/errors";
 import {
@@ -22,18 +23,6 @@ import {
 } from "@/server/api/request";
 import { created, handleApiError, ok } from "@/server/api/responses";
 import { getOrdersData } from "@/server/queries";
-
-function startOfToday() {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return today;
-}
-
-function endOfDay(date: Date) {
-  const value = new Date(date);
-  value.setHours(23, 59, 59, 999);
-  return value;
-}
 
 function deriveAccountStatus(balance: number, dueDate: Date | null) {
   if (balance <= 0) {
@@ -47,32 +36,6 @@ function deriveAccountStatus(balance: number, dueDate: Date | null) {
   return AccountStatus.active;
 }
 
-async function ensureTodayCashSession(userId: string) {
-  const today = startOfToday();
-  const existing = await db.cashSession.findFirst({
-    where: {
-      sessionDate: {
-        gte: today,
-        lte: endOfDay(today),
-      },
-    },
-  });
-
-  if (existing) {
-    return existing;
-  }
-
-  return db.cashSession.create({
-    data: {
-      sessionDate: today,
-      openingAmount: 0,
-      expectedAmount: 0,
-      differenceAmount: 0,
-      notes: "Sesion creada automaticamente por el sistema.",
-      openedBy: userId,
-    },
-  });
-}
 
 async function createAuditLog({
   action,

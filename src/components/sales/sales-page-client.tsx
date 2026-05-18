@@ -12,36 +12,43 @@ type SaleSummary = {
   description: string;
   amount: number;
   method: string;
-  payments: {
-    method: string;
-    amount: number;
-  }[];
+  payments: { method: string; amount: number }[];
 };
 
-type CustomerOption = {
-  customerId: string;
-  name: string;
-};
-
-type OrderOption = {
-  id: string;
-  customer: string;
-  product: string;
-};
+type CustomerOption = { customerId: string; name: string };
+type OrderOption = { id: string; customer: string; product: string };
 
 type SalesPageClientProps = {
   canCreate: boolean;
   initialPanel?: "new" | null;
 };
 
-const paymentLabels: Record<string, string> = {
+const PAYMENT_METHODS = [
+  { value: "cash", label: "Efectivo" },
+  { value: "transfer", label: "Transferencia" },
+  { value: "card", label: "Tarjeta" },
+  { value: "account", label: "A cuenta" },
+  { value: "mixed", label: "Mixto" },
+] as const;
+
+const PAYMENT_LABELS: Record<string, string> = {
   efectivo: "Efectivo",
   transferencia: "Transferencia",
   tarjeta: "Tarjeta",
   mixto: "Mixto",
+  account: "A cuenta",
 };
 
-const methodFilters = ["all", "efectivo", "transferencia", "tarjeta", "mixto"] as const;
+const METHOD_FILTERS = ["all", "efectivo", "transferencia", "tarjeta", "mixto"] as const;
+
+const MIXED_OPTIONS = [
+  { value: "cash", label: "Efectivo" },
+  { value: "transfer", label: "Transferencia" },
+  { value: "card", label: "Tarjeta" },
+  { value: "account", label: "A cuenta" },
+] as const;
+
+type MixedPart = { method: string; amount: string };
 
 export function SalesPageClient({ canCreate, initialPanel = null }: SalesPageClientProps) {
   const router = useRouter();
@@ -53,8 +60,10 @@ export function SalesPageClient({ canCreate, initialPanel = null }: SalesPageCli
   const [loadingSales, setLoadingSales] = useState(true);
   const [loadingCustomers, setLoadingCustomers] = useState(true);
   const [loadingOrders, setLoadingOrders] = useState(true);
-  const [methodFilter, setMethodFilter] = useState<"all" | "efectivo" | "transferencia" | "tarjeta" | "mixto">("all");
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState("cash");
+  const [methodFilter, setMethodFilter] = useState<(typeof METHOD_FILTERS)[number]>("all");
+  const [paymentMethod, setPaymentMethod] = useState("cash");
+  const [mixedParts, setMixedParts] = useState<MixedPart[]>([{ method: "cash", amount: "" }]);
+  const [totalAmount, setTotalAmount] = useState("");
   const [notice, setNotice] = useState<string>();
   const [error, setError] = useState<string>();
   const [panel, setPanel] = useState<"new" | null>(() =>
@@ -62,71 +71,75 @@ export function SalesPageClient({ canCreate, initialPanel = null }: SalesPageCli
   );
   const [isPending, startTransition] = useTransition();
 
-  async function fetchSales() {
-    const response = await fetch("/api/sales", { cache: "no-store" });
+  const parsedTotal = parseFloat(totalAmount.replace(",", ".")) || 0;
+  const mixedSum = mixedParts.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+  const mixedRemaining = roundMoney(parsedTotal - mixedSum);
+  const usedMethods = new Set(mixedParts.map((p) => p.method));
+  const availableMixedOptions = MIXED_OPTIONS.filter((o) => !usedMethods.has(o.value));
 
-    if (!response.ok) {
-      const data = (await response.json().catch(() => null)) as { error?: string } | null;
-      setError(data?.error ?? "No se pudieron cargar las ventas.");
-      setSales([]);
-      setLoadingSales(false);
-      return;
-    }
+  function roundMoney(v: number) { return Math.round(v * 100) / 100; }
 
-    const data = (await response.json()) as SaleSummary[];
-    setSales(data);
-    setLoadingSales(false);
+  function addMixedPart() {
+    const next = MIXED_OPTIONS.find((o) => !usedMethods.has(o.value));
+    if (next) setMixedParts((prev) => [...prev, { method: next.value, amount: "" }]);
   }
 
-  function clearPanelUrl() {
-    router.replace(pathname, { scroll: false });
+  function removeMixedPart(index: number) {
+    setMixedParts((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function updateMixedPart(index: number, field: "method" | "amount", value: string) {
+    setMixedParts((prev) => prev.map((p, i) => i === index ? { ...p, [field]: value } : p));
+  }
+
+  async function fetchSales() {
+    const res = await fetch("/api/sales", { cache: "no-store" });
+    if (!res.ok) { setSales([]); setLoadingSales(false); return; }
+    setSales(await res.json() as SaleSummary[]);
+    setLoadingSales(false);
   }
 
   function closePanel() {
     setPanel(null);
-    clearPanelUrl();
+    router.replace(pathname, { scroll: false });
   }
 
   function openCreatePanel() {
     setError(undefined);
+    setPaymentMethod("cash");
+    setMixedParts([{ method: "cash", amount: "" }]);
+    setTotalAmount("");
     setPanel("new");
   }
 
   async function submitCreate(formData: FormData) {
-    const paymentMethod = String(formData.get("paymentMethod") ?? "cash");
-    const paymentParts =
-      paymentMethod === "mixed"
-        ? [
-            { method: "cash", amount: String(formData.get("paymentCash") ?? "") },
-            { method: "transfer", amount: String(formData.get("paymentTransfer") ?? "") },
-            { method: "card", amount: String(formData.get("paymentCard") ?? "") },
-          ]
-        : [];
+    const method = String(formData.get("paymentMethod") ?? "cash");
+    const paymentParts = method === "mixed"
+      ? mixedParts
+          .map((p) => ({ method: p.method, amount: parseFloat(p.amount) || 0 }))
+          .filter((p) => p.amount > 0)
+      : [];
 
     const payload = {
       description: String(formData.get("description") ?? ""),
       amount: String(formData.get("amount") ?? ""),
       saleDate: String(formData.get("saleDate") ?? ""),
       category: String(formData.get("category") ?? "local"),
-      paymentMethod,
+      paymentMethod: method,
       paymentParts,
       relatedCustomerId: String(formData.get("relatedCustomerId") ?? ""),
       relatedOrderId: String(formData.get("relatedOrderId") ?? ""),
       notes: String(formData.get("notes") ?? ""),
     };
 
-    const response = await fetch("/api/sales", {
+    const res = await fetch("/api/sales", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
 
-    const data = (await response.json().catch(() => null)) as { error?: string; message?: string } | null;
-
-    if (!response.ok) {
-      setError(data?.error ?? "No se pudo registrar la venta.");
-      return;
-    }
+    const data = (await res.json().catch(() => null)) as { error?: string; message?: string } | null;
+    if (!res.ok) { setError(data?.error ?? "No se pudo registrar la venta."); return; }
 
     setNotice(data?.message ?? "Venta registrada correctamente.");
     closePanel();
@@ -136,91 +149,45 @@ export function SalesPageClient({ canCreate, initialPanel = null }: SalesPageCli
   useEffect(() => {
     let active = true;
 
-    async function loadSales() {
-      const response = await fetch("/api/sales", { cache: "no-store" });
+    async function load() {
+      const [salesRes, customersRes, ordersRes] = await Promise.all([
+        fetch("/api/sales", { cache: "no-store" }),
+        fetch("/api/customers", { cache: "no-store" }),
+        fetch("/api/orders", { cache: "no-store" }),
+      ]);
 
       if (!active) return;
 
-      if (!response.ok) {
-        const data = (await response.json().catch(() => null)) as { error?: string } | null;
-        setError(data?.error ?? "No se pudieron cargar las ventas.");
-        setSales([]);
-        setLoadingSales(false);
-        return;
-      }
-
-      const data = (await response.json()) as SaleSummary[];
-      if (!active) return;
-      setSales(data);
+      if (salesRes.ok) setSales(await salesRes.json() as SaleSummary[]);
       setLoadingSales(false);
-    }
 
-    async function loadCustomers() {
-      const response = await fetch("/api/customers", { cache: "no-store" });
-
-      if (!active) return;
-
-      if (!response.ok) {
-        setLoadingCustomers(false);
-        return;
+      if (customersRes.ok) {
+        const data = await customersRes.json() as CustomerOption[];
+        setCustomers(data.map((c) => ({ customerId: c.customerId, name: c.name })).sort((a, b) => a.name.localeCompare(b.name)));
       }
-
-      const data = (await response.json()) as CustomerOption[];
-      if (!active) return;
-      setCustomers(
-        data
-          .map((c) => ({ customerId: c.customerId, name: c.name }))
-          .sort((a, b) => a.name.localeCompare(b.name)),
-      );
       setLoadingCustomers(false);
-    }
 
-    async function loadOrders() {
-      const response = await fetch("/api/orders", { cache: "no-store" });
-
-      if (!active) return;
-
-      if (!response.ok) {
-        setLoadingOrders(false);
-        return;
-      }
-
-      const data = (await response.json()) as OrderOption[];
-      if (!active) return;
-      setOrders(data);
+      if (ordersRes.ok) setOrders(await ordersRes.json() as OrderOption[]);
       setLoadingOrders(false);
     }
 
-    void loadSales();
-    void loadCustomers();
-    void loadOrders();
-
-    return () => {
-      active = false;
-    };
+    void load();
+    return () => { active = false; };
   }, []);
 
-  const total = sales.reduce((sum, sale) => sum + sale.amount, 0);
+  const total = sales.reduce((sum, s) => sum + s.amount, 0);
   const transferTotal = sales.reduce(
-    (sum, sale) =>
-      sum +
-      sale.payments
-        .filter((payment) => payment.method === "transferencia")
-        .reduce((paymentSum, payment) => paymentSum + payment.amount, 0),
+    (sum, s) => sum + s.payments.filter((p) => p.method === "transferencia").reduce((ps, p) => ps + p.amount, 0),
     0,
   );
-  const loadingDropdowns = loadingCustomers || loadingOrders;
-  const filteredSales = sales.filter((sale) => {
-    if (methodFilter === "all") {
-      return true;
-    }
-
-    if (methodFilter === "mixto") {
-      return sale.method === "mixto";
-    }
-
-    return sale.payments.some((payment) => payment.method === methodFilter);
+  const filteredSales = sales.filter((s) => {
+    if (methodFilter === "all") return true;
+    if (methodFilter === "mixto") return s.method === "mixto";
+    return s.payments.some((p) => p.method === methodFilter);
   });
+
+  const needsCustomer = paymentMethod === "account" ||
+    (paymentMethod === "mixed" && mixedParts.some((p) => p.method === "account" && parseFloat(p.amount) > 0));
 
   return (
     <main className="flex flex-col gap-6">
@@ -234,45 +201,37 @@ export function SalesPageClient({ canCreate, initialPanel = null }: SalesPageCli
               Carga comercial del día
             </h1>
             <p className="mt-1 text-sm leading-6 text-[var(--text-secondary)]">
-              Cada venta nueva impacta automáticamente en caja. Podés asociarla a cliente o pedido
-              cuando corresponda.
+              Cada venta impacta en caja. Las ventas a cuenta generan deuda en la cuenta corriente del cliente.
             </p>
           </div>
-
-          {canCreate ? (
+          {canCreate && (
             <button
               onClick={openCreatePanel}
               className="rounded-full bg-[var(--primary)] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[var(--primary-dark)]"
             >
               Registrar venta
             </button>
-          ) : null}
+          )}
         </div>
 
         <div className="mt-5 grid gap-3 md:grid-cols-3">
           <article className="surface-muted rounded-[22px] p-4">
-            <p className="text-sm text-[var(--text-secondary)]">Operaciones visibles</p>
-            <p className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-[var(--text-primary)]">
-              {sales.length}
-            </p>
+            <p className="text-sm text-[var(--text-secondary)]">Operaciones</p>
+            <p className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-[var(--text-primary)]">{sales.length}</p>
           </article>
           <article className="surface-muted rounded-[22px] p-4">
             <p className="text-sm text-[var(--text-secondary)]">Ingresos por transferencia</p>
-            <p className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-[var(--info)]">
-              {formatCurrency(transferTotal)}
-            </p>
+            <p className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-[var(--info)]">{formatCurrency(transferTotal)}</p>
           </article>
           <article className="surface-walnut rounded-[22px] p-4">
             <p className="text-sm text-[rgba(237,242,237,0.72)]">Total cargado</p>
-            <p className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-[var(--text-primary)]">
-              {formatCurrency(total)}
-            </p>
+            <p className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-[var(--text-primary)]">{formatCurrency(total)}</p>
           </article>
         </div>
       </section>
 
       <div className="flex flex-wrap gap-2">
-        {methodFilters.map((m) => (
+        {METHOD_FILTERS.map((m) => (
           <button
             key={m}
             onClick={() => setMethodFilter(m)}
@@ -282,60 +241,45 @@ export function SalesPageClient({ canCreate, initialPanel = null }: SalesPageCli
                 : "border border-[var(--border-soft)] text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]"
             }`}
           >
-            {m === "all" ? "Todas" : paymentLabels[m]}
+            {m === "all" ? "Todas" : PAYMENT_LABELS[m] ?? m}
           </button>
         ))}
       </div>
 
       <section className="space-y-3">
         {loadingSales ? (
-          <div className="page-frame rounded-[28px] p-5 text-sm text-[var(--text-secondary)]">
-            Cargando ventas...
-          </div>
+          <div className="page-frame rounded-[28px] p-5 text-sm text-[var(--text-secondary)]">Cargando ventas...</div>
         ) : sales.length === 0 ? (
-          <div className="page-frame rounded-[28px] p-5 text-sm text-[var(--text-secondary)]">
-            Todavía no hay ventas cargadas.
-          </div>
+          <div className="page-frame rounded-[28px] p-5 text-sm text-[var(--text-secondary)]">Todavía no hay ventas cargadas.</div>
         ) : filteredSales.length === 0 ? (
-          <div className="page-frame rounded-[28px] p-5 text-sm text-[var(--text-secondary)]">
-            No hay ventas para ese medio de pago.
-          </div>
+          <div className="page-frame rounded-[28px] p-5 text-sm text-[var(--text-secondary)]">No hay ventas para ese medio de pago.</div>
         ) : (
           filteredSales.map((sale) => (
-            <article
-              key={sale.id}
-              className="page-frame flex flex-col gap-3 rounded-[24px] p-4 sm:flex-row sm:items-center sm:justify-between"
-            >
+            <article key={sale.id} className="page-frame flex flex-col gap-3 rounded-[24px] p-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h3 className="font-semibold text-[var(--text-primary)]">{sale.description}</h3>
                 <p className="mt-1 text-sm text-[var(--text-secondary)]">
-                  {sale.date} - {paymentLabels[sale.method] ?? sale.method}
+                  {sale.date} · {PAYMENT_LABELS[sale.method] ?? sale.method}
                 </p>
-                {sale.payments.length > 1 ? (
+                {sale.payments.length > 1 && (
                   <div className="mt-2 flex flex-wrap gap-2">
-                    {sale.payments.map((payment) => (
-                      <span
-                        key={`${sale.id}-${payment.method}`}
-                        className="rounded-full border border-[var(--border-soft)] px-3 py-1 text-xs font-semibold text-[var(--text-secondary)]"
-                      >
-                        {paymentLabels[payment.method] ?? payment.method}: {formatCurrency(payment.amount)}
+                    {sale.payments.map((p) => (
+                      <span key={`${sale.id}-${p.method}`} className="rounded-full border border-[var(--border-soft)] px-3 py-1 text-xs font-semibold text-[var(--text-secondary)]">
+                        {PAYMENT_LABELS[p.method] ?? p.method}: {formatCurrency(p.amount)}
                       </span>
                     ))}
                   </div>
-                ) : null}
+                )}
               </div>
-              <p className="text-2xl font-semibold tracking-[-0.03em] text-[var(--success)]">
-                {formatCurrency(sale.amount)}
-              </p>
+              <p className="text-2xl font-semibold tracking-[-0.03em] text-[var(--success)]">{formatCurrency(sale.amount)}</p>
             </article>
           ))
         )}
       </section>
 
-      {panel ? (
+      {panel && (
         <div className="overlay-panel-shell">
           <button aria-label="Cerrar panel" className="overlay-panel-dismiss" onClick={closePanel} />
-
           <section role="dialog" aria-modal="true" className="overlay-panel">
             <div className="overlay-panel-header">
               <div>
@@ -343,11 +287,7 @@ export function SalesPageClient({ canCreate, initialPanel = null }: SalesPageCli
                 <h2 className="mt-1 text-xl font-semibold tracking-[-0.03em] text-[var(--text-primary)] sm:text-2xl">
                   Registrar venta del día
                 </h2>
-                <p className="mt-1 text-sm leading-5 text-[var(--text-secondary)]">
-                  Cargá importe, medio de pago y datos asociados sin salir de la vista principal.
-                </p>
               </div>
-
               <button
                 onClick={closePanel}
                 className="rounded-full border border-[var(--border-soft)] bg-[var(--surface-muted)] px-4 py-2 text-sm font-semibold text-[var(--text-primary)] transition hover:border-[var(--border-strong)] hover:bg-[var(--surface-strong)]"
@@ -357,32 +297,28 @@ export function SalesPageClient({ canCreate, initialPanel = null }: SalesPageCli
             </div>
 
             {!canCreate ? (
-              <p className="rounded-[22px] border border-[var(--border-soft)] bg-[rgba(13,15,14,0.68)] px-4 py-3 text-sm text-[var(--text-secondary)]">
+              <p className="rounded-[22px] border border-[var(--border-soft)] px-4 py-3 text-sm text-[var(--text-secondary)]">
                 Tu perfil no tiene permiso para registrar ventas.
               </p>
             ) : (
               <form
-                onSubmit={(event) => {
-                  event.preventDefault();
+                onSubmit={(e) => {
+                  e.preventDefault();
                   setError(undefined);
                   startTransition(async () => {
-                    const formData = new FormData(event.currentTarget);
-                    await submitCreate(formData);
+                    await submitCreate(new FormData(e.currentTarget));
                   });
                 }}
                 className="overlay-panel-form"
               >
                 <div className="compact-form-grid">
                   <div className="md:col-span-2">
-                    <label className="field-label" htmlFor="description">
-                      Descripción
-                    </label>
+                    <label className="field-label" htmlFor="description">Descripción</label>
                     <input id="description" name="description" required className="field-input" />
                   </div>
+
                   <div>
-                    <label className="field-label" htmlFor="amount">
-                      Importe
-                    </label>
+                    <label className="field-label" htmlFor="amount">Importe total</label>
                     <input
                       id="amount"
                       name="amount"
@@ -390,19 +326,19 @@ export function SalesPageClient({ canCreate, initialPanel = null }: SalesPageCli
                       min="0.01"
                       step="0.01"
                       required
+                      value={totalAmount}
+                      onChange={(e) => setTotalAmount(e.target.value)}
                       className="field-input"
                     />
                   </div>
+
                   <div>
-                    <label className="field-label" htmlFor="saleDate">
-                      Fecha
-                    </label>
+                    <label className="field-label" htmlFor="saleDate">Fecha</label>
                     <input id="saleDate" name="saleDate" type="date" className="field-input" />
                   </div>
+
                   <div>
-                    <label className="field-label" htmlFor="category">
-                      Categoría
-                    </label>
+                    <label className="field-label" htmlFor="category">Categoría</label>
                     <select id="category" name="category" defaultValue="local" className="field-select">
                       <option value="local">Venta local</option>
                       <option value="pedido">Pedido</option>
@@ -410,128 +346,147 @@ export function SalesPageClient({ canCreate, initialPanel = null }: SalesPageCli
                       <option value="otros">Otros</option>
                     </select>
                   </div>
+
                   <div>
-                    <label className="field-label" htmlFor="paymentMethod">
-                      Medio de pago
-                    </label>
+                    <label className="field-label" htmlFor="paymentMethod">Medio de pago</label>
                     <select
                       id="paymentMethod"
                       name="paymentMethod"
-                      value={selectedPaymentMethod}
-                      onChange={(event) => setSelectedPaymentMethod(event.currentTarget.value)}
+                      value={paymentMethod}
+                      onChange={(e) => { setPaymentMethod(e.target.value); setMixedParts([{ method: "cash", amount: "" }]); }}
                       className="field-select"
                     >
-                      <option value="cash">Efectivo</option>
-                      <option value="transfer">Transferencia</option>
-                      <option value="card">Tarjeta</option>
-                      <option value="mixed">Mixto</option>
+                      {PAYMENT_METHODS.map((m) => (
+                        <option key={m.value} value={m.value}>{m.label}</option>
+                      ))}
                     </select>
                   </div>
-                  {selectedPaymentMethod === "mixed" ? (
-                    <div className="md:col-span-2">
-                      <div className="rounded-[22px] border border-[var(--border-soft)] bg-[rgba(13,15,14,0.68)] p-4">
-                        <p className="text-sm font-semibold text-[var(--text-primary)]">
-                          Distribucion del pago
-                        </p>
-                        <p className="mt-1 text-sm leading-5 text-[var(--text-secondary)]">
-                          Carga al menos dos importes. La suma debe coincidir con el importe total.
-                        </p>
-                        <div className="mt-4 grid gap-3 md:grid-cols-3">
-                          <div>
-                            <label className="field-label" htmlFor="paymentCash">
-                              Efectivo
-                            </label>
-                            <input
-                              id="paymentCash"
-                              name="paymentCash"
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              className="field-input"
-                            />
-                          </div>
-                          <div>
-                            <label className="field-label" htmlFor="paymentTransfer">
-                              Transferencia
-                            </label>
-                            <input
-                              id="paymentTransfer"
-                              name="paymentTransfer"
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              className="field-input"
-                            />
-                          </div>
-                          <div>
-                            <label className="field-label" htmlFor="paymentCard">
-                              Tarjeta
-                            </label>
-                            <input
-                              id="paymentCard"
-                              name="paymentCard"
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              className="field-input"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ) : null}
-                  <div>
+
+                  {/* Cliente — obligatorio cuando hay "a cuenta" */}
+                  <div className={needsCustomer ? "md:col-span-2" : ""}>
                     <label className="field-label" htmlFor="relatedCustomerId">
-                      Cliente relacionado
+                      Cliente{needsCustomer && <span className="ml-1 text-[var(--danger)]">*</span>}
                     </label>
                     <select
                       id="relatedCustomerId"
                       name="relatedCustomerId"
+                      required={needsCustomer}
                       disabled={loadingCustomers}
                       className="field-select"
                     >
-                      <option value="">Sin cliente asociado</option>
-                      {customers.map((customer) => (
-                        <option key={customer.customerId} value={customer.customerId}>
-                          {customer.name}
-                        </option>
+                      <option value="">{needsCustomer ? "Seleccioná un cliente (requerido)" : "Sin cliente asociado"}</option>
+                      {customers.map((c) => (
+                        <option key={c.customerId} value={c.customerId}>{c.name}</option>
                       ))}
                     </select>
+                    {needsCustomer && (
+                      <p className="mt-1.5 text-xs text-[var(--text-muted)]">
+                        El saldo que queda a cuenta genera deuda en la cuenta corriente del cliente.
+                      </p>
+                    )}
                   </div>
-                  <div>
-                    <label className="field-label" htmlFor="relatedOrderId">
-                      Pedido relacionado
-                    </label>
-                    <select
-                      id="relatedOrderId"
-                      name="relatedOrderId"
-                      disabled={loadingOrders}
-                      className="field-select"
-                    >
-                      <option value="">Sin pedido asociado</option>
-                      {orders.map((order) => (
-                        <option key={order.id} value={order.id}>
-                          {order.customer} · {order.product}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+
+                  {/* Distribución mixta */}
+                  {paymentMethod === "mixed" && (
+                    <div className="md:col-span-2">
+                      <div className="rounded-[22px] border border-[var(--border-soft)] bg-[rgba(13,15,14,0.68)] p-4">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-semibold text-[var(--text-primary)]">Distribución del pago</p>
+                          {parsedTotal > 0 && (
+                            <p className={`text-xs font-semibold ${Math.abs(mixedRemaining) < 0.01 ? "text-[var(--success)]" : "text-[var(--warning)]"}`}>
+                              {Math.abs(mixedRemaining) < 0.01
+                                ? "Suma correcta"
+                                : mixedRemaining > 0
+                                  ? `Faltan ${formatCurrency(mixedRemaining)}`
+                                  : `Sobran ${formatCurrency(Math.abs(mixedRemaining))}`}
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="mt-4 space-y-3">
+                          {mixedParts.map((part, index) => {
+                            const optionsForThisPart = MIXED_OPTIONS.filter(
+                              (o) => o.value === part.method || !usedMethods.has(o.value),
+                            );
+                            return (
+                              <div key={index} className="flex items-center gap-2">
+                                <select
+                                  value={part.method}
+                                  onChange={(e) => updateMixedPart(index, "method", e.target.value)}
+                                  className="field-select flex-1"
+                                >
+                                  {optionsForThisPart.map((o) => (
+                                    <option key={o.value} value={o.value}>{o.label}</option>
+                                  ))}
+                                </select>
+                                <input
+                                  type="number"
+                                  min="0.01"
+                                  step="0.01"
+                                  placeholder="0.00"
+                                  value={part.amount}
+                                  onChange={(e) => updateMixedPart(index, "amount", e.target.value)}
+                                  className="field-input w-36 shrink-0"
+                                />
+                                {mixedParts.length > 2 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => removeMixedPart(index)}
+                                    className="shrink-0 rounded-full border border-[var(--border-soft)] px-3 py-2 text-xs text-[var(--text-muted)] transition hover:border-[var(--danger)] hover:text-[var(--danger)]"
+                                  >
+                                    ×
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {availableMixedOptions.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={addMixedPart}
+                            className="mt-3 text-xs font-semibold text-[var(--text-muted)] transition hover:text-[var(--text-primary)]"
+                          >
+                            + Agregar medio de pago
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* A cuenta — muestra resumen del saldo que queda */}
+                  {paymentMethod === "account" && parsedTotal > 0 && (
+                    <div className="md:col-span-2">
+                      <div className="rounded-[18px] border border-[rgba(154,118,85,0.28)] bg-[rgba(123,91,62,0.08)] px-4 py-3 text-sm text-[var(--text-primary)]">
+                        Queda <span className="font-semibold">{formatCurrency(parsedTotal)}</span> pendiente en la cuenta corriente del cliente.
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Pedido relacionado */}
+                  {!needsCustomer && (
+                    <div>
+                      <label className="field-label" htmlFor="relatedOrderId">Pedido relacionado</label>
+                      <select id="relatedOrderId" name="relatedOrderId" disabled={loadingOrders} className="field-select">
+                        <option value="">Sin pedido asociado</option>
+                        {orders.map((o) => (
+                          <option key={o.id} value={o.id}>{o.customer} · {o.product}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
                   <div className="md:col-span-2">
-                    <label className="field-label" htmlFor="notes">
-                      Notas
-                    </label>
-                    <textarea
-                      id="notes"
-                      name="notes"
-                      className="field-textarea min-h-[88px] resize-none"
-                    />
+                    <label className="field-label" htmlFor="notes">Notas</label>
+                    <textarea id="notes" name="notes" className="field-textarea min-h-[88px] resize-none" />
                   </div>
                 </div>
 
                 <div className="overlay-panel-actions">
                   <button
                     type="submit"
-                    disabled={isPending || loadingDropdowns}
+                    disabled={isPending || loadingCustomers}
                     className="rounded-full bg-[var(--primary)] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[var(--primary-dark)] disabled:cursor-not-allowed disabled:opacity-70"
                   >
                     {isPending ? "Guardando..." : "Guardar venta"}
@@ -541,7 +496,7 @@ export function SalesPageClient({ canCreate, initialPanel = null }: SalesPageCli
             )}
           </section>
         </div>
-      ) : null}
+      )}
     </main>
   );
 }

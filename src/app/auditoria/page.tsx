@@ -150,7 +150,7 @@ export default async function AuditoriaPage({ searchParams }: PageProps) {
                   </select>
                 </div>
                 <div className="flex items-end gap-3">
-                  <button className="w-full rounded-full bg-[var(--primary)] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[var(--primary-dark)]">
+                  <button type="submit" className="w-full rounded-full bg-[var(--primary)] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[var(--primary-dark)]">
                     Filtrar
                   </button>
                   <Link
