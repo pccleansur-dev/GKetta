@@ -11,7 +11,7 @@ export function Sidebar({ currentUser }: { currentUser: SessionUser }) {
 
   return (
     <>
-      <aside className="surface executive-card fixed left-[max(2rem,calc((100vw-1520px)/2+2rem))] top-6 z-30 hidden max-h-[calc(100dvh-3rem)] w-[328px] rounded-[28px] p-5 lg:flex lg:flex-col lg:overflow-hidden">
+      <aside className="surface executive-card sidebar-panel hidden max-h-[calc(100dvh-3rem)] w-[328px] rounded-[28px] p-5 lg:flex lg:flex-col lg:overflow-hidden">
         <div className="mb-6 flex items-center gap-4">
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[rgba(154,118,85,0.35)] bg-[linear-gradient(180deg,#284334,#1f3428)] text-lg font-semibold text-[#f2f1eb]">
             K
