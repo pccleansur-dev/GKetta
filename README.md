@@ -4,22 +4,31 @@ Sistema interno para administrar la operacion diaria del local: clientes, cuenta
 
 ## Captura
 
-![Pantalla de clientes de Sistema Kettal](./clientes-after-create.png)
+![Pantalla de clientes de Sistema Kettal](./public/readme/dashboard-clientes.png)
 
 ## Funciones principales
 
-- Dashboard ejecutivo con KPIs, cuentas que requieren atencion, caja del dia, pedidos activos, ventas recientes, recordatorios y actividad operativa.
-- Gestion de clientes con alta, edicion, baja logica, telefono, documento, notas, vencimiento mensual y saldo inicial.
-- Cuentas corrientes por cliente con saldo, estados, vencimientos y registro de pagos o ajustes.
-- Pedidos con producto, sena, saldo pendiente, estado de entrega y confirmacion de pago.
-- Ventas del dia con categoria, medio de pago y relacion opcional con clientes o pedidos.
-- Caja diaria con apertura, ingresos, egresos, total esperado y trazabilidad de movimientos.
-- Recordatorios de deuda con acceso directo a WhatsApp para contactar clientes con cuentas vencidas o proximas a vencer.
-- Usuarios con roles (`owner`, `manager`, `staff`) y permisos segun el perfil.
-- Auditoria de acciones relevantes para seguir altas, cambios y registros operativos.
-- Setup inicial guiado para definir nombre del negocio, nueva contrasena de admin, ruta de backups y retencion.
-- Restauracion desde backup JSON y backups automaticos diarios.
-- Login con sesiones persistentes para uso interno del sistema.
+### Operacion diaria
+
+- `Dashboard ejecutivo`: KPIs, cuentas que requieren atencion, caja del dia, pedidos activos, ventas recientes, recordatorios y actividad operativa.
+- `Clientes`: alta, edicion, baja logica, telefono, documento, notas, vencimiento mensual y saldo inicial.
+- `Cuentas corrientes`: saldo, estados, vencimientos y registro de pagos o ajustes.
+- `Pedidos`: producto, sena, saldo pendiente, estado de entrega y confirmacion de pago.
+- `Ventas`: categoria, medio de pago y relacion opcional con clientes o pedidos.
+- `Caja diaria`: apertura, ingresos, egresos, total esperado y trazabilidad de movimientos.
+- `Recordatorios`: acceso directo a WhatsApp para contactar clientes con cuentas vencidas o proximas a vencer.
+
+### Administracion y seguridad
+
+- `Usuarios y roles`: perfiles `owner`, `manager` y `staff` con permisos segun el acceso.
+- `Auditoria`: seguimiento de altas, cambios y registros operativos relevantes.
+- `Login interno`: sesiones persistentes para uso diario del sistema.
+
+### Puesta en marcha y respaldo
+
+- `Setup inicial`: nombre del negocio, nueva contrasena de admin, ruta de backups y retencion.
+- `Restauracion`: recuperacion desde backup JSON.
+- `Backups automaticos`: generacion diaria para resguardar la informacion.
 
 ## Stack
 

@@ -40,6 +40,7 @@ yarn-error.log*
 .playwright-mcp/
 backups/
 clientes-*.png
+!public/readme/dashboard-clientes.png
 
 # vercel
 .vercel
