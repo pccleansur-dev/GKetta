@@ -41,6 +41,7 @@ type OrdersPageClientProps = {
 const DEFAULT_ORDER_STATUS = "confirmed";
 const DEFAULT_PAYMENT_STATUS = "confirmed";
 const DEFAULT_PAYMENT_METHOD = "transfer";
+const DEFAULT_SALE_MODE = "paid";
 
 export function OrdersPageClient({
   canCreate,
@@ -72,6 +73,7 @@ export function OrdersPageClient({
   });
   const [selectedOrder, setSelectedOrder] = useState<OrderDetail | null>(null);
   const [requestedOrderId, setRequestedOrderId] = useState<string>(initialOrderId ?? "");
+  const [saleMode, setSaleMode] = useState(DEFAULT_SALE_MODE);
   const [isPending, startTransition] = useTransition();
 
   async function fetchOrders() {
@@ -133,6 +135,7 @@ export function OrdersPageClient({
     setError(undefined);
     setSelectedOrder(null);
     setRequestedOrderId("");
+    setSaleMode(DEFAULT_SALE_MODE);
     setPanel("new");
   }
 
@@ -150,10 +153,10 @@ export function OrdersPageClient({
       totalAmount: String(formData.get("totalAmount") ?? ""),
       depositAmount: String(formData.get("depositAmount") ?? "0"),
       deliveryDate: String(formData.get("deliveryDate") ?? ""),
+      dueDate: String(formData.get("dueDate") ?? ""),
+      saleMode: String(formData.get("saleMode") ?? DEFAULT_SALE_MODE),
       status: String(formData.get("status") ?? DEFAULT_ORDER_STATUS),
-      paymentConfirmationStatus: String(
-        formData.get("paymentConfirmationStatus") ?? DEFAULT_PAYMENT_STATUS,
-      ),
+      paymentConfirmationStatus: DEFAULT_PAYMENT_STATUS,
       paymentMethod: String(formData.get("paymentMethod") ?? DEFAULT_PAYMENT_METHOD),
       notes: String(formData.get("notes") ?? ""),
     };
@@ -344,10 +347,10 @@ export function OrdersPageClient({
           <div>
             <p className="section-kicker">Pedidos puntuales</p>
             <h1 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-[var(--text-primary)]">
-              Pedidos con seña y confirmación
+              Pedidos ligados a ventas
             </h1>
             <p className="mt-1 text-sm leading-6 text-[var(--text-secondary)]">
-              Seguimiento del producto, fecha de entrega, seña cobrada y saldo pendiente.
+              Cada pedido nace desde una venta. Solo las ventas a cuenta generan saldo y vencimiento.
             </p>
           </div>
 
@@ -470,11 +473,11 @@ export function OrdersPageClient({
                   {panel === "new" ? "Nuevo pedido" : "Editar pedido"}
                 </p>
                 <h2 className="mt-1 text-xl font-semibold tracking-[-0.03em] text-[var(--text-primary)] sm:text-2xl">
-                  {panel === "new" ? "Pedido con seña y seguimiento" : "Cambiar estado y entrega"}
+                  {panel === "new" ? "Pedido desde una venta" : "Cambiar estado y entrega"}
                 </h2>
                 <p className="mt-1 text-sm leading-5 text-[var(--text-secondary)]">
                   {panel === "new"
-                    ? "Cargá producto, total, seña y fecha sin salir de la vista principal."
+                    ? "Carga producto, total, cobro y vencimiento solo si queda a cuenta."
                     : "Ajustá estado, entrega y notas desde este panel compacto."}
                 </p>
               </div>
@@ -565,7 +568,7 @@ export function OrdersPageClient({
                       </div>
                       <div>
                         <label className="field-label" htmlFor="totalAmount">
-                          Total del pedido
+                          Total de venta
                         </label>
                         <input
                           id="totalAmount"
@@ -578,7 +581,8 @@ export function OrdersPageClient({
                         />
                       </div>
                       <div>
-                        <label className="field-label" htmlFor="depositAmount">
+                        <span className="field-label">Importe cobrado</span>
+                        <label className="sr-only" htmlFor="depositAmount">
                           Seña cobrada
                         </label>
                         <input
@@ -591,6 +595,29 @@ export function OrdersPageClient({
                           className="field-input"
                         />
                       </div>
+                      <div>
+                        <label className="field-label" htmlFor="saleMode">
+                          Tipo de venta
+                        </label>
+                        <select
+                          id="saleMode"
+                          name="saleMode"
+                          value={saleMode}
+                          onChange={(event) => setSaleMode(event.currentTarget.value)}
+                          className="field-select"
+                        >
+                          <option value="paid">Venta cobrada</option>
+                          <option value="account">A cuenta</option>
+                        </select>
+                      </div>
+                      {saleMode === "account" ? (
+                        <div>
+                          <label className="field-label" htmlFor="dueDate">
+                            Fecha de vencimiento
+                          </label>
+                          <input id="dueDate" name="dueDate" type="date" required className="field-input" />
+                        </div>
+                      ) : null}
                       <div>
                         <label className="field-label" htmlFor="deliveryDate">
                           Fecha de entrega
@@ -613,7 +640,7 @@ export function OrdersPageClient({
                           <option value="ready">Listo</option>
                         </select>
                       </div>
-                      <div>
+                      <div className="hidden">
                         <label className="field-label" htmlFor="paymentConfirmationStatus">
                           Confirmación de la seña
                         </label>
@@ -629,7 +656,8 @@ export function OrdersPageClient({
                         </select>
                       </div>
                       <div>
-                        <label className="field-label" htmlFor="paymentMethod">
+                        <span className="field-label">Medio de cobro</span>
+                        <label className="sr-only" htmlFor="paymentMethod">
                           Medio de pago de la seña
                         </label>
                         <select
@@ -641,7 +669,6 @@ export function OrdersPageClient({
                           <option value="cash">Efectivo</option>
                           <option value="transfer">Transferencia</option>
                           <option value="card">Tarjeta</option>
-                          <option value="mixed">Mixto</option>
                         </select>
                       </div>
                     </>
