@@ -222,10 +222,11 @@ textarea {
   position: relative;
   z-index: 1;
   width: 100%;
-  height: 100dvh;
+  height: auto;
+  max-height: 96dvh;
   display: flex;
   flex-direction: column;
-  gap: 0.9rem;
+  gap: 0.75rem;
   padding: 1rem;
   overflow-y: auto;
   background:
@@ -240,21 +241,20 @@ textarea {
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
-  padding-bottom: 0.9rem;
+  padding-bottom: 0.75rem;
   border-bottom: 1px solid var(--border-soft);
 }
 
 .overlay-panel-form {
   display: flex;
-  flex: 1 1 auto;
   flex-direction: column;
-  gap: 0.9rem;
+  gap: 0.75rem;
 }
 
 .overlay-panel-actions {
   display: flex;
   justify-content: flex-end;
-  margin-top: auto;
+  padding-top: 0.25rem;
 }
 
 .compact-form-grid {
@@ -284,20 +284,18 @@ textarea {
   }
 }
 
-@media (min-width: 768px) {
+@media (min-width: 640px) {
   .compact-form-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-}
 
-@media (min-width: 640px) {
   .overlay-panel-shell {
     padding: 1rem;
   }
 
   .overlay-panel {
-    width: min(100%, 48rem);
-    height: calc(100dvh - 2rem);
+    width: min(90vw, 56rem);
+    max-height: calc(100dvh - 2rem);
     border: 1px solid var(--border-soft);
     border-radius: 30px;
     padding: 1.1rem 1.25rem;

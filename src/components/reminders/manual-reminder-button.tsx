@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 type CustomerOption = {
   id: string;
@@ -14,11 +15,14 @@ function normalizePhone(phone: string) {
 }
 
 export function ManualReminderButton() {
+  const [mounted, setMounted] = useState(false);
   const [open, setOpen] = useState(false);
   const [customers, setCustomers] = useState<CustomerOption[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [message, setMessage] = useState("");
   const [sent, setSent] = useState(false);
+
+  useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -73,7 +77,7 @@ export function ManualReminderButton() {
         Mensaje manual
       </button>
 
-      {open && (
+      {mounted && open && createPortal(
         <div className="overlay-panel-shell" style={{ zIndex: 60 }}>
           <button className="overlay-panel-dismiss" onClick={handleClose} aria-label="Cerrar" />
           <div className="overlay-panel" style={{ maxHeight: "100dvh", overflowY: "auto" }}>
@@ -157,7 +161,8 @@ export function ManualReminderButton() {
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );

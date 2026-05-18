@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { KpiCard, SectionCard } from "@/components/dashboard/cards";
 import { CloseCashButton } from "@/components/cash/close-cash-button";
+import { OpenCashButton } from "@/components/cash/open-cash-button";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { getDashboardData } from "@/server/queries";
 import { formatCurrency, statusLabel, statusPill } from "@/lib/format";
@@ -124,7 +125,20 @@ export default async function Home() {
               <p className="mt-2 text-3xl font-semibold tracking-[-0.04em]">
                 {formatCurrency(cashSnapshot.expected)}
               </p>
-              <CloseCashButton expectedAmount={cashSnapshot.expected} />
+              {cashSnapshot.sessionStatus === "none" && (
+                <OpenCashButton />
+              )}
+              {cashSnapshot.sessionStatus === "open" && (
+                <CloseCashButton
+                  expectedAmount={cashSnapshot.expected}
+                  expectedCash={cashSnapshot.incomeCash}
+                  expectedTransfer={cashSnapshot.incomeTransfer}
+                  expectedCard={cashSnapshot.incomeCard}
+                />
+              )}
+              {cashSnapshot.sessionStatus === "closed" && (
+                <p className="mt-4 text-sm font-semibold text-[var(--success)]">Caja cerrada hoy ✓</p>
+              )}
             </div>
           </SectionCard>
         </section>

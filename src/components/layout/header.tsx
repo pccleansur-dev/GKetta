@@ -1,6 +1,5 @@
 import Link from "next/link";
 
-import { VentaSplitButton } from "@/components/layout/venta-split-button";
 import type { SessionUser } from "@/lib/session";
 
 export function Header({ currentUser, businessName = "Sistema Kettal" }: { currentUser: SessionUser; businessName?: string }) {
@@ -30,7 +29,12 @@ export function Header({ currentUser, businessName = "Sistema Kettal" }: { curre
             </span>
           )}
 
-          <VentaSplitButton />
+          <Link
+            href="/ventas?panel=new"
+            className="rounded-[18px] bg-[var(--primary)] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_12px_28px_rgba(45,76,57,0.35)] transition hover:bg-[var(--primary-dark)]"
+          >
+            Registrar venta
+          </Link>
         </div>
       </div>
     </header>

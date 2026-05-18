@@ -242,6 +242,9 @@ model CashSession {
   sessionDate      DateTime       @unique @map("session_date") @db.Date
   openingAmount    Decimal        @default(0) @map("opening_amount") @db.Decimal(12, 2)
   closingAmount    Decimal?       @map("closing_amount") @db.Decimal(12, 2)
+  closingCash      Decimal?       @map("closing_cash") @db.Decimal(12, 2)
+  closingTransfer  Decimal?       @map("closing_transfer") @db.Decimal(12, 2)
+  closingCard      Decimal?       @map("closing_card") @db.Decimal(12, 2)
   expectedAmount   Decimal        @default(0) @map("expected_amount") @db.Decimal(12, 2)
   differenceAmount Decimal        @default(0) @map("difference_amount") @db.Decimal(12, 2)
   notes            String?

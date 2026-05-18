@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
 
 import { FeedbackBanner } from "@/components/ui/feedback-banner";
@@ -75,6 +76,7 @@ export function SalesPageClient({ canCreate, initialPanel = null, initialMode = 
     initialPanel === "new" && canCreate ? "new" : null,
   );
   const [operationMode, setOperationMode] = useState<OperationMode>(initialMode);
+  const [mounted, setMounted] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [notice, setNotice] = useState<string>();
   const [error, setError] = useState<string>();
@@ -110,6 +112,8 @@ export function SalesPageClient({ canCreate, initialPanel = null, initialMode = 
   const availableMixedOptions = MIXED_OPTIONS.filter((o) => !usedMethods.has(o.value));
   const needsCustomer = paymentMethod === "account" ||
     (paymentMethod === "mixed" && mixedParts.some((p) => p.method === "account" && parseFloat(p.amount) > 0));
+
+  useEffect(() => { setMounted(true); }, []);
 
   function roundMoney(v: number) { return Math.round(v * 100) / 100; }
 
@@ -359,7 +363,7 @@ export function SalesPageClient({ canCreate, initialPanel = null, initialMode = 
         )}
       </section>
 
-      {panel && (
+      {mounted && panel && createPortal(
         <div className="overlay-panel-shell">
           <button aria-label="Cerrar panel" className="overlay-panel-dismiss" onClick={closePanel} />
           <section role="dialog" aria-modal="true" className="overlay-panel">
@@ -384,14 +388,22 @@ export function SalesPageClient({ canCreate, initialPanel = null, initialMode = 
             ) : (
               <>
                 {/* Mode toggle */}
-                <div className="inline-flex self-start overflow-hidden rounded-full border border-[var(--border-soft)]">
+                <div className="grid grid-cols-2 gap-2 rounded-[20px] border border-[var(--border-soft)] bg-[var(--surface-muted)] p-1.5">
                   <button type="button" onClick={() => setOperationMode("sale")}
-                    className={`px-5 py-2.5 text-sm font-semibold transition ${operationMode === "sale" ? "bg-[var(--primary)] text-white" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"}`}
+                    className={`rounded-[14px] px-4 py-2.5 text-sm font-semibold transition ${
+                      operationMode === "sale"
+                        ? "bg-[var(--primary)] text-white shadow-[0_6px_16px_rgba(45,76,57,0.3)]"
+                        : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                    }`}
                   >
                     Venta directa
                   </button>
                   <button type="button" onClick={() => setOperationMode("order")}
-                    className={`px-5 py-2.5 text-sm font-semibold transition ${operationMode === "order" ? "bg-[var(--primary)] text-white" : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"}`}
+                    className={`rounded-[14px] px-4 py-2.5 text-sm font-semibold transition ${
+                      operationMode === "order"
+                        ? "bg-[var(--primary)] text-white shadow-[0_6px_16px_rgba(45,76,57,0.3)]"
+                        : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
+                    }`}
                   >
                     Con seña · Pedido
                   </button>
@@ -618,7 +630,7 @@ export function SalesPageClient({ canCreate, initialPanel = null, initialMode = 
 
                     <div className="md:col-span-2">
                       <label className="field-label" htmlFor="notes">Notas</label>
-                      <textarea id="notes" name="notes" className="field-textarea min-h-[88px] resize-none" />
+                      <textarea id="notes" name="notes" className="field-textarea resize-none" style={{ minHeight: 64 }} />
                     </div>
                   </div>
 
@@ -633,7 +645,8 @@ export function SalesPageClient({ canCreate, initialPanel = null, initialMode = 
               </>
             )}
           </section>
-        </div>
+        </div>,
+        document.body
       )}
     </main>
   );

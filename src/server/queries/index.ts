@@ -289,7 +289,7 @@ export async function getDashboardData() {
         take: 3,
       }),
       db.cashSession.findFirst({
-        orderBy: { sessionDate: "desc" },
+        where: { sessionDate: { gte: today, lte: endOfDay(today) } },
         include: { cashMovements: true },
       }),
       db.sale.findMany({
@@ -423,6 +423,7 @@ export async function getDashboardData() {
       };
     }),
     cashSnapshot: {
+      sessionStatus: !latestCashSession ? "none" : latestCashSession.closedAt ? "closed" : "open",
       opening: toNumber(latestCashSession?.openingAmount),
       incomeCash: sumIncomeByMethod(latestCashSession?.cashMovements, PaymentMethod.cash),
       incomeTransfer: sumIncomeByMethod(latestCashSession?.cashMovements, PaymentMethod.transfer),
@@ -432,7 +433,7 @@ export async function getDashboardData() {
           .filter((movement) => movement.movementType === CashMovementType.expense)
           .reduce((sum, movement) => sum + toNumber(movement.amount), 0) ?? 0,
       expected: toNumber(latestCashSession?.expectedAmount),
-    },
+    } as const,
   };
 }
 
@@ -547,7 +548,7 @@ export async function getOrdersData() {
   const orders = await db.order.findMany({
     where: {
       status: {
-        notIn: [OrderStatus.cancelled, OrderStatus.delivered],
+        not: OrderStatus.cancelled,
       },
     },
     include: { customer: true },

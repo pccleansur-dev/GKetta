@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -42,7 +43,7 @@ export function OrdersPageClient({ canEdit, initialPanel = null, initialOrderId 
   const pathname = usePathname();
 
   const [orders, setOrders] = useState<OrderSummary[]>([]);
-  const [statusFilter, setStatusFilter] = useState<"all" | "confirmado" | "en proceso" | "listo">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "confirmado" | "en proceso" | "listo" | "entregado">("all");
   const [loadingOrders, setLoadingOrders] = useState(true);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [notice, setNotice] = useState<string>();
@@ -52,6 +53,8 @@ export function OrdersPageClient({ canEdit, initialPanel = null, initialOrderId 
   );
   const [selectedOrder, setSelectedOrder] = useState<OrderDetail | null>(null);
   const [requestedOrderId, setRequestedOrderId] = useState<string>(initialOrderId ?? "");
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
   const [isPending, startTransition] = useTransition();
 
   async function fetchOrders() {
@@ -166,7 +169,7 @@ export function OrdersPageClient({ canEdit, initialPanel = null, initialOrderId 
       </section>
 
       <div className="flex flex-wrap gap-2">
-        {(["all", "confirmado", "en proceso", "listo"] as const).map((s) => (
+        {(["all", "confirmado", "en proceso", "listo", "entregado"] as const).map((s) => (
           <button key={s} onClick={() => setStatusFilter(s)}
             className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${statusFilter === s ? "bg-[var(--primary)] text-white" : "border border-[var(--border-soft)] text-[var(--text-secondary)] hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]"}`}
           >
@@ -220,7 +223,7 @@ export function OrdersPageClient({ canEdit, initialPanel = null, initialOrderId 
         )}
       </section>
 
-      {panel === "edit" && (
+      {mounted && panel === "edit" && createPortal(
         <div className="overlay-panel-shell">
           <button aria-label="Cerrar panel" className="overlay-panel-dismiss" onClick={closePanel} />
           <section role="dialog" aria-modal="true" className="overlay-panel">
@@ -296,7 +299,8 @@ export function OrdersPageClient({ canEdit, initialPanel = null, initialOrderId 
                   <div className="md:col-span-2">
                     <label className="field-label" htmlFor="notes">Notas</label>
                     <textarea id="notes" name="notes" defaultValue={selectedOrder.notes}
-                      className="field-textarea min-h-[88px] resize-none"
+                      className="field-textarea resize-none"
+                      style={{ minHeight: 64 }}
                     />
                   </div>
                 </div>
@@ -311,7 +315,8 @@ export function OrdersPageClient({ canEdit, initialPanel = null, initialOrderId 
               </form>
             )}
           </section>
-        </div>
+        </div>,
+        document.body
       )}
     </main>
   );
