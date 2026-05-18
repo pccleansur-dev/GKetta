@@ -79,13 +79,23 @@ docker --version
 
 ## 2. Iniciar Docker Desktop
 
-Antes de seguir, abrir `Docker Desktop` y esperar a que termine de arrancar.
+Antes de seguir, abrir `Docker Desktop` y esperar a que termine de arrancar por completo.
+
+Importante:
+
+- instalar Docker no alcanza por si solo
+- despues de la instalacion hay que abrir `Docker Desktop` al menos una vez
+- si Docker queda en estado `Starting...`, esperar unos minutos
+- si pide reiniciar la computadora o habilitar `WSL`, aceptar
+- no continuar hasta que Docker quede realmente corriendo
 
 Verificacion:
 
 ```powershell
 docker version
 ```
+
+Si `docker version` muestra la seccion `Client` pero da error de conexion con el daemon, normalmente significa que `Docker Desktop` todavia no termino de iniciar.
 
 En macOS tambien podes abrirlo con:
 
@@ -114,6 +124,17 @@ Copy-Item .env.example .env
 
 ```bash
 cp .env.example .env
+```
+
+Si `Copy-Item .env.example .env` o `cp .env.example .env` falla porque `.env.example` no existe, crear `.env` manualmente con este contenido:
+
+```text
+POSTGRES_DB=sistema_kettal
+POSTGRES_USER=kettal
+POSTGRES_PASSWORD=kettal_dev_123
+
+# Para correr la app fuera de Docker
+DATABASE_URL=postgresql://kettal:kettal_dev_123@localhost:5433/sistema_kettal?schema=public
 ```
 
 ## 5. Verificar el entorno del proyecto
