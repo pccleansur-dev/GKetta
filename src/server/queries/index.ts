@@ -267,7 +267,7 @@ export async function getDashboardData() {
   const today = startOfToday();
   const weekEnd = addDays(today, 7);
 
-  const [accounts, orders, recentSales, latestCashSession, salesTodayRows, dueThisWeek, recentAuditLogs] =
+  const [accounts, orders, recentSales, latestCashSession, lastClosedSession, salesTodayRows, dueThisWeek, recentAuditLogs] =
     await Promise.all([
       db.customerAccount.findMany({
         where: { deletedAt: null },
@@ -291,6 +291,11 @@ export async function getDashboardData() {
       db.cashSession.findFirst({
         where: { sessionDate: { gte: today, lte: endOfDay(today) } },
         include: { cashMovements: true },
+      }),
+      db.cashSession.findFirst({
+        where: { closedAt: { not: null } },
+        orderBy: { sessionDate: "desc" },
+        select: { closingAmount: true },
       }),
       db.sale.findMany({
         where: {
@@ -424,6 +429,7 @@ export async function getDashboardData() {
     }),
     cashSnapshot: {
       sessionStatus: !latestCashSession ? "none" : latestCashSession.closedAt ? "closed" : "open",
+      previousClosing: lastClosedSession ? toNumber(lastClosedSession.closingAmount) : null,
       opening: toNumber(latestCashSession?.openingAmount),
       incomeCash: sumIncomeByMethod(latestCashSession?.cashMovements, PaymentMethod.cash),
       incomeTransfer: sumIncomeByMethod(latestCashSession?.cashMovements, PaymentMethod.transfer),

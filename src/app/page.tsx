@@ -126,7 +126,7 @@ export default async function Home() {
                 {formatCurrency(cashSnapshot.expected)}
               </p>
               {cashSnapshot.sessionStatus === "none" && (
-                <OpenCashButton />
+                <OpenCashButton previousClosing={cashSnapshot.previousClosing ?? undefined} />
               )}
               {cashSnapshot.sessionStatus === "open" && (
                 <CloseCashButton
