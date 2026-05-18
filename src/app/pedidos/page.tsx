@@ -17,7 +17,7 @@ export default async function PedidosPage({ searchParams }: PageProps) {
   const params = searchParams ? await searchParams : undefined;
   const panelParam = readSingle(params?.panel);
   const orderId = readSingle(params?.orderId);
-  const panel = panelParam === "new" || panelParam === "edit" ? panelParam : null;
+  const panel = panelParam === "edit" ? "edit" : null;
 
   return (
     <DashboardShell>

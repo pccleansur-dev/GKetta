@@ -42,7 +42,7 @@ export function VentaSplitButton() {
       {open && (
         <div className="absolute right-0 top-full z-20 mt-1 min-w-full overflow-hidden rounded-[14px] border border-[var(--border-soft)] bg-[var(--surface)] shadow-[var(--shadow-soft)]">
           <Link
-            href="/pedidos?panel=new"
+            href="/ventas?panel=new&mode=order"
             onClick={() => setOpen(false)}
             className="block px-4 py-3 text-sm font-semibold text-[var(--text-primary)] transition hover:bg-[var(--surface-muted)]"
           >

@@ -16,13 +16,16 @@ export default async function VentasPage({ searchParams }: PageProps) {
   const currentUser = await requireSessionUser();
   const params = searchParams ? await searchParams : undefined;
   const panelParam = readSingle(params?.panel);
+  const modeParam = readSingle(params?.mode);
   const panel = panelParam === "new" ? "new" : null;
+  const initialMode = modeParam === "order" ? "order" : "sale";
 
   return (
     <DashboardShell>
       <SalesPageClient
         canCreate={canCreateSales(currentUser.role)}
         initialPanel={panel}
+        initialMode={initialMode}
       />
     </DashboardShell>
   );
