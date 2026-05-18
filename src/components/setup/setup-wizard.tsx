@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { PasswordField } from "@/components/ui/password-field";
@@ -13,7 +13,51 @@ type Mode = "choice" | "setup" | "restore";
 const SETUP_STEPS = ["Negocio", "Contrasena", "Backup", "Confirmar"] as const;
 const RESTORE_STEPS = ["Archivo", "Contrasena", "Confirmar"] as const;
 
-const defaultBackupPath = (isDocker: boolean) => (isDocker ? "./backups" : "");
+const defaultBackupPath = (_isDocker: boolean) => "";
+
+function DockerRestartScreen({ router }: { router: ReturnType<typeof useRouter> }) {
+  const [status, setStatus] = useState<"restarting" | "ready">("restarting");
+
+  useEffect(() => {
+    let attempts = 0;
+    const poll = setInterval(() => {
+      attempts++;
+      // Wait at least 4 seconds before polling so the container has time to go down
+      if (attempts < 2) return;
+      fetch("/api/session")
+        .then((res) => {
+          if (res.ok || res.status === 401) {
+            setStatus("ready");
+            clearInterval(poll);
+            setTimeout(() => {
+              router.replace("/");
+              router.refresh();
+            }, 800);
+          }
+        })
+        .catch(() => {
+          // Server still down — keep polling
+        });
+    }, 2000);
+    return () => clearInterval(poll);
+  }, [router]);
+
+  return (
+    <div className="mt-6 space-y-4 text-center">
+      <p className="text-base font-semibold text-[var(--text-primary)]">
+        {status === "restarting" ? "Reiniciando Docker..." : "Listo, ingresando..."}
+      </p>
+      <p className="text-sm text-[var(--text-secondary)]">
+        {status === "restarting"
+          ? "El sistema se esta reiniciando para aplicar la nueva ruta de backups. Esto tarda unos segundos."
+          : "El sistema volvio. Redirigiendo..."}
+      </p>
+      <div className="flex justify-center pt-2">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-[var(--border-soft)] border-t-[var(--primary)]" />
+      </div>
+    </div>
+  );
+}
 
 function SetupFlow({ isDocker, onBack }: { isDocker: boolean; onBack: () => void }) {
   const router = useRouter();
@@ -26,6 +70,7 @@ function SetupFlow({ isDocker, onBack }: { isDocker: boolean; onBack: () => void
   const [confirmPassword, setConfirmPassword] = useState("");
   const [backupPath, setBackupPath] = useState(defaultBackupPath(isDocker));
   const [retentionDays, setRetentionDays] = useState("60");
+  const [needsDockerRestart, setNeedsDockerRestart] = useState(false);
 
   const isCloudPath =
     backupPath.toLowerCase().includes("onedrive") ||
@@ -40,7 +85,7 @@ function SetupFlow({ isDocker, onBack }: { isDocker: boolean; onBack: () => void
       if (password.length < 8) return "La contrasena debe tener al menos 8 caracteres.";
       if (password !== confirmPassword) return "Las contrasenas no coinciden.";
     }
-    if (step === 2 && !backupPath.trim()) return "Ingresa la ruta de la carpeta de backup.";
+    if (step === 2 && !isDocker && !backupPath.trim()) return "Ingresa la ruta de la carpeta de backup.";
     return null;
   }
 
@@ -62,14 +107,22 @@ function SetupFlow({ isDocker, onBack }: { isDocker: boolean; onBack: () => void
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ businessName, password, confirmPassword, backupPath, retentionDays }),
       });
-      const data = (await res.json().catch(() => null)) as { error?: string } | null;
+      const data = (await res.json().catch(() => null)) as { error?: string; needsDockerRestart?: boolean } | null;
       if (!res.ok) {
         setError(data?.error ?? "No se pudo completar la configuracion.");
+        return;
+      }
+      if (data?.needsDockerRestart) {
+        setNeedsDockerRestart(true);
         return;
       }
       router.replace("/");
       router.refresh();
     });
+  }
+
+  if (needsDockerRestart) {
+    return <DockerRestartScreen router={router} />;
   }
 
   return (
@@ -138,10 +191,11 @@ function SetupFlow({ isDocker, onBack }: { isDocker: boolean; onBack: () => void
             </p>
             {isDocker ? (
               <div className="surface-muted rounded-[18px] px-4 py-3 text-sm text-[var(--text-secondary)]">
-                En modo Docker los backups se guardan en{" "}
-                <span className="font-semibold text-[var(--text-primary)]">./backups/</span> del
-                proyecto. Si esa carpeta vive dentro de OneDrive, Dropbox o similar, tus backups
-                tambien quedan sincronizados afuera de la app.
+                Ingresa una ruta de Windows. El sistema la va a escribir en el archivo{" "}
+                <span className="font-mono font-semibold text-[var(--text-primary)]">.env</span>{" "}
+                del proyecto. Luego de completar el setup, reinicia Docker con{" "}
+                <span className="font-mono font-semibold text-[var(--text-primary)]">docker compose up -d</span>{" "}
+                para que el volumen apunte a esa carpeta.
               </div>
             ) : (
               <div className="surface-muted rounded-[18px] px-4 py-3 text-sm text-[var(--text-secondary)]">
@@ -157,7 +211,7 @@ function SetupFlow({ isDocker, onBack }: { isDocker: boolean; onBack: () => void
                 value={backupPath}
                 onChange={(event) => setBackupPath(event.target.value)}
                 className="field-input"
-                placeholder={isDocker ? "./backups" : "C:\\Users\\...\\OneDrive\\Kettal\\backups"}
+                placeholder={isDocker ? "C:\\Users\\...\\Documents\\Backups" : "C:\\Users\\...\\OneDrive\\Kettal\\backups"}
               />
               {backupPath ? (
                 <p

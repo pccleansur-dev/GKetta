@@ -3,8 +3,15 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { LogoutButton } from "@/components/auth/logout-button";
 import { navItems } from "@/lib/mock-data";
 import type { SessionUser } from "@/lib/session";
+
+const roleLabels: Record<SessionUser["role"], string> = {
+  owner: "Dueño",
+  manager: "Encargada",
+  staff: "Empleada",
+};
 
 export function Sidebar({ currentUser }: { currentUser: SessionUser }) {
   const pathname = usePathname();
@@ -50,6 +57,15 @@ export function Sidebar({ currentUser }: { currentUser: SessionUser }) {
               );
             })}
         </nav>
+
+        <div className="mt-4 shrink-0 rounded-[20px] border border-[var(--border-soft)] bg-[var(--surface-muted)] p-4">
+          <p className="text-sm font-semibold text-[var(--text-primary)]">{currentUser.fullName}</p>
+          <p className="mt-0.5 text-xs text-[var(--text-secondary)]">{roleLabels[currentUser.role]}</p>
+          <LogoutButton
+            label="Salir"
+            className="mt-3 w-full rounded-full border border-[var(--border-soft)] bg-[var(--surface-muted)] px-4 py-2 text-sm font-semibold text-[var(--text-primary)] transition hover:border-[var(--border-strong)] hover:bg-[var(--surface-strong)] disabled:cursor-not-allowed disabled:opacity-70"
+          />
+        </div>
       </aside>
 
       <nav className="surface fixed inset-x-4 bottom-4 z-40 flex items-center gap-1 overflow-x-auto rounded-[22px] px-2 py-2 lg:hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">

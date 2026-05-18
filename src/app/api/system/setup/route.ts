@@ -1,11 +1,33 @@
+import fs from "fs/promises";
+
 import { NextResponse } from "next/server";
 
 import { db } from "@/lib/db";
+import { restartSelf } from "@/lib/docker";
 import { hashPassword } from "@/lib/password";
 import { ApiError } from "@/server/api/errors";
 import { asRequiredString, asOptionalString, readJson } from "@/server/api/request";
 import { handleApiError } from "@/server/api/responses";
 import { createSession, setSessionCookie, shouldUseSecureCookie } from "@/server/api/auth";
+
+async function updateEnvHostFile(backupPath: string) {
+  const envPath = "/app/.env.host";
+  let content = "";
+  try {
+    content = await fs.readFile(envPath, "utf-8");
+  } catch {
+    return;
+  }
+  const lines = content.split("\n");
+  const idx = lines.findIndex((l) => l.startsWith("BACKUP_PATH="));
+  const newLine = `BACKUP_PATH=${backupPath}`;
+  if (idx >= 0) {
+    lines[idx] = newLine;
+  } else {
+    lines.push(newLine);
+  }
+  await fs.writeFile(envPath, lines.join("\n"), "utf-8");
+}
 
 const SETUP_COOKIE = "kettal_setup_done";
 const ONE_YEAR = 365 * 24 * 60 * 60;
@@ -30,7 +52,7 @@ export async function POST(request: Request) {
     const businessName = asRequiredString(body.businessName, "el nombre del negocio");
     const password = asRequiredString(body.password, "la contraseña");
     const confirmPassword = asRequiredString(body.confirmPassword, "la confirmación");
-    const backupPath = asOptionalString(body.backupPath) ?? "./backups";
+    const backupPath = asOptionalString(body.backupPath)?.trim() || "./backups";
     const retentionDays = asOptionalString(body.retentionDays) ?? "60";
 
     if (password !== confirmPassword) {
@@ -68,8 +90,16 @@ export async function POST(request: Request) {
       upsertConfig("backup_retention_days", retentionDays),
     ]);
 
+    // Write BACKUP_PATH to host .env so docker-compose volume picks it up on next restart
+    const needsDockerRestart = backupPath !== "./backups" && backupPath !== "/app/backups";
+    await updateEnvHostFile(backupPath);
+
     // Build response with both cookies
-    const response = NextResponse.json({ ok: true, message: "Configuración guardada correctamente." });
+    const response = NextResponse.json({
+      ok: true,
+      message: "Configuración guardada correctamente.",
+      needsDockerRestart,
+    });
 
     // Mark setup done (1 year)
     response.cookies.set(SETUP_COOKIE, "1", {
@@ -82,6 +112,13 @@ export async function POST(request: Request) {
     // Log in as owner
     const sessionToken = await createSession(owner.id);
     setSessionCookie(response, sessionToken, shouldUseSecureCookie(request));
+
+    // Trigger Docker restart after response is sent so the new volume takes effect
+    if (needsDockerRestart) {
+      setTimeout(() => {
+        restartSelf().catch(console.error);
+      }, 1500);
+    }
 
     return response;
   } catch (error) {

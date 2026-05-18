@@ -29,10 +29,13 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-kettal}:${POSTGRES_PASSWORD:-kettal_dev_123}@postgres:5432/${POSTGRES_DB:-sistema_kettal}?schema=public
       NODE_ENV: production
+      CONTAINER_NAME: sistema-kettal-app
     ports:
       - "3017:3000"
     volumes:
-      - ./backups:/app/backups
+      - ${BACKUP_PATH:-./backups}:/app/backups
+      - ./.env:/app/.env.host
+      - /var/run/docker.sock:/var/run/docker.sock
 
 volumes:
   postgres_data:
