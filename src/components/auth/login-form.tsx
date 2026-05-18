@@ -46,13 +46,13 @@ export function LoginForm({ initialError }: { initialError?: string }) {
       <form onSubmit={onSubmit} className="mt-5 space-y-4">
         <div>
           <label className="field-label" htmlFor="username">
-            Usuario o nombre
+            Usuario
           </label>
           <input
             id="username"
             name="username"
             type="text"
-            placeholder="admin"
+            placeholder="Ingresa tu usuario"
             className="field-input"
           />
         </div>
