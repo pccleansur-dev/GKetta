@@ -38,6 +38,10 @@ Sistema interno para administrar la operacion diaria del local: clientes, cuenta
 - `PostgreSQL 16`
 - `Docker Compose`
 
+## Guia de instalacion
+
+Para replicar el sistema en otra computadora, ver [GUIA-DE-INSTALACION.md](./GUIA-DE-INSTALACION.md).
+
 ## Uso recomendado
 
 ### 1. Verificar entorno
