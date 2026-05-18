@@ -104,6 +104,12 @@ export default async function Home() {
                 </p>
               </div>
               <div className="surface-muted rounded-[22px] p-4">
+                <p className="text-sm text-[var(--text-secondary)]">Ingresos tarjeta</p>
+                <p className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-[var(--info)]">
+                  {formatCurrency(cashSnapshot.incomeCard)}
+                </p>
+              </div>
+              <div className="surface-muted rounded-[22px] p-4">
                 <p className="text-sm text-[var(--text-secondary)]">Egresos</p>
                 <p className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-[var(--danger)]">
                   {formatCurrency(cashSnapshot.expenses)}

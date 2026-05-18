@@ -25,6 +25,66 @@ function endOfDay(date: Date) {
   return value;
 }
 
+const SPLIT_PAYMENT_METHODS = [PaymentMethod.cash, PaymentMethod.transfer, PaymentMethod.card] as const;
+
+type SalePaymentPart = {
+  method: (typeof SPLIT_PAYMENT_METHODS)[number];
+  amount: number;
+};
+
+function roundMoney(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
+function parsePaymentParts(body: Record<string, unknown>, amount: number, paymentMethod: PaymentMethod) {
+  if (paymentMethod !== PaymentMethod.mixed) {
+    if (!Object.values(PaymentMethod).includes(paymentMethod)) {
+      throw new ApiError(400, "El medio de pago no es valido.");
+    }
+
+    return [{ method: paymentMethod, amount }];
+  }
+
+  const rawParts = Array.isArray(body.paymentParts) ? body.paymentParts : [];
+  const parts = rawParts
+    .map((part) => {
+      if (!part || typeof part !== "object") {
+        return null;
+      }
+
+      const record = part as Record<string, unknown>;
+      const method = asOptionalString(record.method) as PaymentMethod | null;
+      const partAmount = asOptionalNumber(record.amount);
+
+      if (!method || !SPLIT_PAYMENT_METHODS.includes(method as SalePaymentPart["method"])) {
+        return null;
+      }
+
+      if (partAmount == null || Number.isNaN(partAmount) || partAmount <= 0) {
+        return null;
+      }
+
+      return { method: method as SalePaymentPart["method"], amount: roundMoney(partAmount) };
+    })
+    .filter((part): part is SalePaymentPart => part != null);
+
+  if (parts.length < 2) {
+    throw new ApiError(400, "Una venta mixta debe tener al menos dos medios de pago con importe.");
+  }
+
+  const methods = new Set(parts.map((part) => part.method));
+  if (methods.size !== parts.length) {
+    throw new ApiError(400, "No repitas el mismo medio de pago en una venta mixta.");
+  }
+
+  const partsTotal = roundMoney(parts.reduce((sum, part) => sum + part.amount, 0));
+  if (partsTotal !== roundMoney(amount)) {
+    throw new ApiError(400, "La suma de los medios de pago debe coincidir con el importe total.");
+  }
+
+  return parts;
+}
+
 async function ensureTodayCashSession(userId: string) {
   const today = startOfToday();
   const existing = await db.cashSession.findFirst({
@@ -105,6 +165,7 @@ export async function POST(request: Request) {
       throw new ApiError(400, "El importe de la venta debe ser mayor a cero.");
     }
 
+    const paymentParts = parsePaymentParts(body, roundMoney(amount), paymentMethod);
     const session = await ensureTodayCashSession(user.id);
 
     const sale = await db.$transaction(async (tx) => {
@@ -122,17 +183,17 @@ export async function POST(request: Request) {
         },
       });
 
-      await tx.cashMovement.create({
-        data: {
+      await tx.cashMovement.createMany({
+        data: paymentParts.map((part) => ({
           cashSessionId: session.id,
           movementType: CashMovementType.income,
           source: CashMovementSource.sale,
-          amount,
-          paymentMethod,
+          amount: part.amount,
+          paymentMethod: part.method,
           description,
           relatedSaleId: newSale.id,
           createdBy: user.id,
-        },
+        })),
       });
 
       await tx.cashSession.update({
@@ -148,7 +209,7 @@ export async function POST(request: Request) {
       action: "create",
       entityId: sale.id,
       entityName: "sale",
-      payload: { description, amount, category, paymentMethod },
+      payload: { description, amount, category, paymentMethod, paymentParts },
     });
 
     return created({ saleId: sale.id, message: "Venta registrada correctamente." });

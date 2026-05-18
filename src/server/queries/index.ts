@@ -1,5 +1,6 @@
 import {
   AccountStatus,
+  CashMovementSource,
   CashMovementType,
   OrderStatus,
   PaymentMethod,
@@ -130,6 +131,22 @@ function mapPaymentMethod(method: PaymentMethod) {
     default:
       return "efectivo" as const;
   }
+}
+
+function sumIncomeByMethod(
+  movements:
+    | { movementType: CashMovementType; paymentMethod: PaymentMethod; amount: Prisma.Decimal | number }[]
+    | undefined,
+  method: PaymentMethod,
+) {
+  return (
+    movements
+      ?.filter(
+        (movement) =>
+          movement.movementType === CashMovementType.income && movement.paymentMethod === method,
+      )
+      .reduce((sum, movement) => sum + toNumber(movement.amount), 0) ?? 0
+  );
 }
 
 function normalizePhone(phone: string | null) {
@@ -387,22 +404,9 @@ export async function getDashboardData() {
     }),
     cashSnapshot: {
       opening: toNumber(latestCashSession?.openingAmount),
-      incomeCash:
-        latestCashSession?.cashMovements
-          .filter(
-            (movement) =>
-              movement.movementType === CashMovementType.income &&
-              movement.paymentMethod === PaymentMethod.cash,
-          )
-          .reduce((sum, movement) => sum + toNumber(movement.amount), 0) ?? 0,
-      incomeTransfer:
-        latestCashSession?.cashMovements
-          .filter(
-            (movement) =>
-              movement.movementType === CashMovementType.income &&
-              movement.paymentMethod === PaymentMethod.transfer,
-          )
-          .reduce((sum, movement) => sum + toNumber(movement.amount), 0) ?? 0,
+      incomeCash: sumIncomeByMethod(latestCashSession?.cashMovements, PaymentMethod.cash),
+      incomeTransfer: sumIncomeByMethod(latestCashSession?.cashMovements, PaymentMethod.transfer),
+      incomeCard: sumIncomeByMethod(latestCashSession?.cashMovements, PaymentMethod.card),
       expenses:
         latestCashSession?.cashMovements
           .filter((movement) => movement.movementType === CashMovementType.expense)
@@ -589,15 +593,35 @@ export async function getSalesData() {
   const sales = await db.sale.findMany({
     orderBy: [{ saleDate: "desc" }, { createdAt: "desc" }],
     take: 20,
+    include: {
+      cashMovements: {
+        where: {
+          movementType: CashMovementType.income,
+          source: CashMovementSource.sale,
+        },
+        orderBy: { createdAt: "asc" },
+      },
+    },
   });
 
-  return sales.map((sale) => ({
-    id: sale.id,
-    date: formatLongDate(sale.saleDate),
-    description: sale.description,
-    amount: toNumber(sale.amount),
-    method: mapPaymentMethod(sale.paymentMethod),
-  }));
+  return sales.map((sale) => {
+    const payments =
+      sale.cashMovements.length > 0
+        ? sale.cashMovements.map((movement) => ({
+            method: mapPaymentMethod(movement.paymentMethod),
+            amount: toNumber(movement.amount),
+          }))
+        : [{ method: mapPaymentMethod(sale.paymentMethod), amount: toNumber(sale.amount) }];
+
+    return {
+      id: sale.id,
+      date: formatLongDate(sale.saleDate),
+      description: sale.description,
+      amount: toNumber(sale.amount),
+      method: mapPaymentMethod(sale.paymentMethod),
+      payments,
+    };
+  });
 }
 
 export async function getCashData() {
@@ -627,22 +651,9 @@ export async function getCashData() {
   return {
     snapshot: {
       opening: toNumber(latestSession?.openingAmount),
-      incomeCash:
-        latestSession?.cashMovements
-          .filter(
-            (movement) =>
-              movement.movementType === CashMovementType.income &&
-              movement.paymentMethod === PaymentMethod.cash,
-          )
-          .reduce((sum, movement) => sum + toNumber(movement.amount), 0) ?? 0,
-      incomeTransfer:
-        latestSession?.cashMovements
-          .filter(
-            (movement) =>
-              movement.movementType === CashMovementType.income &&
-              movement.paymentMethod === PaymentMethod.transfer,
-          )
-          .reduce((sum, movement) => sum + toNumber(movement.amount), 0) ?? 0,
+      incomeCash: sumIncomeByMethod(latestSession?.cashMovements, PaymentMethod.cash),
+      incomeTransfer: sumIncomeByMethod(latestSession?.cashMovements, PaymentMethod.transfer),
+      incomeCard: sumIncomeByMethod(latestSession?.cashMovements, PaymentMethod.card),
       expenses:
         latestSession?.cashMovements
           .filter((movement) => movement.movementType === CashMovementType.expense)
