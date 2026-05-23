@@ -68,6 +68,10 @@ function formatLongDate(date: Date) {
   }).format(date);
 }
 
+function isWithinEditWindow(createdAt: Date) {
+  return Date.now() - createdAt.getTime() <= 7 * 24 * 60 * 60 * 1000;
+}
+
 function formatDateTime(date: Date) {
   return new Intl.DateTimeFormat("es-AR", {
     day: "2-digit",
@@ -566,9 +570,11 @@ export async function getOrdersData() {
     customer: order.customer.fullName,
     product: order.productName,
     deliveryDate: formatShortDate(order.deliveryDate),
+    createdAt: order.createdAt.toISOString(),
     deposit: toNumber(order.depositAmount),
     remainingBalance: toNumber(order.remainingBalance),
     status: mapOrderStatus(order.status),
+    editable: isWithinEditWindow(order.createdAt),
   }));
 }
 
@@ -596,6 +602,8 @@ export async function getOrderEditData(orderId?: string) {
     paymentConfirmationStatus: order.paymentConfirmationStatus,
     deliveryDate: order.deliveryDate ? order.deliveryDate.toISOString().slice(0, 10) : "",
     notes: order.notes ?? "",
+    createdAt: order.createdAt.toISOString(),
+    editable: isWithinEditWindow(order.createdAt),
   };
 }
 
@@ -635,6 +643,7 @@ export async function getSalesData() {
     const saleAmount = toNumber(sale.amount);
     const cashTotal = sale.cashMovements.reduce((sum, m) => sum + toNumber(m.amount), 0);
     const accountPortion = Math.round((saleAmount - cashTotal) * 100) / 100;
+    const editable = isWithinEditWindow(sale.createdAt);
 
     let payments: { method: string; amount: number }[];
     if (sale.cashMovements.length === 0) {
@@ -651,9 +660,14 @@ export async function getSalesData() {
     return {
       id: sale.id,
       date: formatLongDate(sale.saleDate),
+      saleDate: sale.saleDate.toISOString().slice(0, 10),
+      createdAt: sale.createdAt.toISOString(),
       description: sale.description,
       amount: saleAmount,
       method: mapPaymentMethod(sale.paymentMethod),
+      relatedOrderId: sale.relatedOrderId ?? null,
+      editable,
+      deletable: editable && sale.relatedOrderId == null,
       payments,
     };
   });

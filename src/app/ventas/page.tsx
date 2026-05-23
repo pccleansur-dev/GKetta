@@ -1,6 +1,6 @@
 import { SalesPageClient } from "@/components/sales/sales-page-client";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
-import { canCreateSales, requireSessionUser } from "@/lib/session";
+import { canCreateSales, canEditSales, requireSessionUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +24,7 @@ export default async function VentasPage({ searchParams }: PageProps) {
     <DashboardShell>
       <SalesPageClient
         canCreate={canCreateSales(currentUser.role)}
+        canEdit={canEditSales(currentUser.role)}
         initialPanel={panel}
         initialMode={initialMode}
       />

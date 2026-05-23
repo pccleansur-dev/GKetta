@@ -8,6 +8,7 @@ import {
   canCreateOrders,
   canCreateSales,
   canEditOrders,
+  canEditSales,
   canManageCustomers,
   canManageUsers,
   canRegisterPayments,
@@ -35,6 +36,7 @@ export function requireRole(
     | "createOrders"
     | "editOrders"
     | "createSales"
+    | "editSales"
     | "manageUsers",
 ) {
   const checks: Record<typeof permission, (role: UserRole) => boolean> = {
@@ -43,6 +45,7 @@ export function requireRole(
     createOrders: canCreateOrders,
     editOrders: canEditOrders,
     createSales: canCreateSales,
+    editSales: canEditSales,
     manageUsers: canManageUsers,
   };
 

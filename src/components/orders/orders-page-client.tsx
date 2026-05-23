@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { createPortal } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -13,9 +12,11 @@ type OrderSummary = {
   customer: string;
   product: string;
   deliveryDate: string;
+  createdAt: string;
   deposit: number;
   remainingBalance: number;
   status: string;
+  editable: boolean;
 };
 
 type OrderDetail = {
@@ -26,6 +27,8 @@ type OrderDetail = {
   paymentConfirmationStatus: string;
   deliveryDate: string;
   notes: string;
+  createdAt: string;
+  editable: boolean;
 };
 
 type OrdersPageClientProps = {
@@ -33,12 +36,15 @@ type OrdersPageClientProps = {
   canEdit: boolean;
   initialPanel?: "edit" | null;
   initialOrderId?: string | null;
+  initialOrderDetail?: OrderDetail | null;
 };
 
-const DEFAULT_ORDER_STATUS = "confirmed";
-const DEFAULT_PAYMENT_STATUS = "confirmed";
-
-export function OrdersPageClient({ canEdit, initialPanel = null, initialOrderId = null }: OrdersPageClientProps) {
+export function OrdersPageClient({
+  canEdit,
+  initialPanel = null,
+  initialOrderId = null,
+  initialOrderDetail = null,
+}: OrdersPageClientProps) {
   const router = useRouter();
   const pathname = usePathname();
 
@@ -49,12 +55,12 @@ export function OrdersPageClient({ canEdit, initialPanel = null, initialOrderId 
   const [notice, setNotice] = useState<string>();
   const [error, setError] = useState<string>();
   const [panel, setPanel] = useState<"edit" | null>(() =>
-    initialPanel === "edit" && canEdit ? "edit" : null,
+    initialPanel === "edit" && canEdit && initialOrderDetail?.editable ? "edit" : null,
   );
-  const [selectedOrder, setSelectedOrder] = useState<OrderDetail | null>(null);
+  const [selectedOrder, setSelectedOrder] = useState<OrderDetail | null>(() =>
+    initialPanel === "edit" && canEdit && initialOrderDetail?.editable ? initialOrderDetail : null,
+  );
   const [requestedOrderId, setRequestedOrderId] = useState<string>(initialOrderId ?? "");
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => { setMounted(true); }, []);
   const [isPending, startTransition] = useTransition();
 
   async function fetchOrders() {
@@ -72,7 +78,14 @@ export function OrdersPageClient({ canEdit, initialPanel = null, initialOrderId 
       setError(data?.error ?? "No se pudo cargar el pedido.");
       setPanel(null); setLoadingDetail(false); return;
     }
-    setSelectedOrder(await res.json() as OrderDetail);
+    const order = await res.json() as OrderDetail;
+    if (!order.editable) {
+      setError("Ventana vencida.");
+      setPanel(null);
+      setLoadingDetail(false);
+      return;
+    }
+    setSelectedOrder(order);
     setRequestedOrderId(orderId);
     setPanel("edit");
     setLoadingDetail(false);
@@ -116,12 +129,6 @@ export function OrdersPageClient({ canEdit, initialPanel = null, initialOrderId 
     }
     void load();
     return () => { active = false; };
-  }, []);
-
-  useEffect(() => {
-    if (initialPanel !== "edit" || !initialOrderId || !canEdit) return;
-    void fetchOrderDetail(initialOrderId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const inProgress = orders.filter((o) => o.status === "en proceso").length;
@@ -208,14 +215,20 @@ export function OrdersPageClient({ canEdit, initialPanel = null, initialOrderId 
                 </div>
               </div>
               <div className="mt-5 flex justify-end">
-                {canEdit ? (
+                {canEdit && order.editable ? (
                   <button onClick={() => void fetchOrderDetail(order.id)}
                     className="rounded-full bg-[var(--primary)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[var(--primary-dark)]"
                   >
                     Editar
                   </button>
+                ) : canEdit ? (
+                  <span className="rounded-full border border-[var(--border-soft)] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">
+                    Vencida
+                  </span>
                 ) : (
-                  <span className="text-sm text-[var(--text-muted)]">Solo lectura</span>
+                  <span className="rounded-full border border-[var(--border-soft)] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">
+                    Solo lectura
+                  </span>
                 )}
               </div>
             </article>
@@ -223,7 +236,7 @@ export function OrdersPageClient({ canEdit, initialPanel = null, initialOrderId 
         )}
       </section>
 
-      {mounted && panel === "edit" && createPortal(
+      {panel === "edit" && (
         <div className="overlay-panel-shell">
           <button aria-label="Cerrar panel" className="overlay-panel-dismiss" onClick={closePanel} />
           <section role="dialog" aria-modal="true" className="overlay-panel">
@@ -315,8 +328,7 @@ export function OrdersPageClient({ canEdit, initialPanel = null, initialOrderId 
               </form>
             )}
           </section>
-        </div>,
-        document.body
+        </div>
       )}
     </main>
   );

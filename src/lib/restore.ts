@@ -142,26 +142,6 @@ export async function restoreFromBackup(backup: BackupData, newAdminPassword: st
         });
       }
 
-      // Restaurar movimientos de cuenta
-      for (const row of backup.data.accountMovements) {
-        const r = row as Record<string, unknown>;
-        await tx.accountMovement.create({
-          data: {
-            id: r.id as string,
-            accountId: r.accountId as string,
-            customerId: r.customerId as string,
-            movementType: r.movementType as "charge" | "payment" | "adjustment" | "forgiven",
-            amount: Number(r.amount),
-            paymentMethod: r.paymentMethod as "cash" | "transfer" | "card" | "mixed" | null ?? null,
-            description: r.description as string,
-            referenceNote: r.referenceNote as string | null ?? null,
-            createdBy: r.createdBy as string,
-            movementDate: new Date(r.movementDate as string),
-            createdAt: new Date(r.createdAt as string),
-          },
-        });
-      }
-
       // Restaurar pedidos
       for (const row of backup.data.orders) {
         const r = row as Record<string, unknown>;
@@ -199,6 +179,27 @@ export async function restoreFromBackup(backup: BackupData, newAdminPassword: st
             relatedOrderId: r.relatedOrderId as string | null ?? null,
             notes: r.notes as string | null ?? null,
             createdBy: r.createdBy as string,
+            createdAt: new Date(r.createdAt as string),
+          },
+        });
+      }
+
+      // Restaurar movimientos de cuenta
+      for (const row of backup.data.accountMovements) {
+        const r = row as Record<string, unknown>;
+        await tx.accountMovement.create({
+          data: {
+            id: r.id as string,
+            accountId: r.accountId as string,
+            customerId: r.customerId as string,
+            relatedSaleId: r.relatedSaleId as string | null ?? null,
+            movementType: r.movementType as "charge" | "payment" | "adjustment" | "forgiven",
+            amount: Number(r.amount),
+            paymentMethod: r.paymentMethod as "cash" | "transfer" | "card" | "mixed" | null ?? null,
+            description: r.description as string,
+            referenceNote: r.referenceNote as string | null ?? null,
+            createdBy: r.createdBy as string,
+            movementDate: new Date(r.movementDate as string),
             createdAt: new Date(r.createdAt as string),
           },
         });

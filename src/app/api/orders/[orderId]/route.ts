@@ -7,6 +7,10 @@ import { asOptionalDate, asOptionalString, asRequiredString, readJson } from "@/
 import { handleApiError, ok } from "@/server/api/responses";
 import { getOrderEditData } from "@/server/queries";
 
+function isWithinEditWindow(createdAt: Date) {
+  return Date.now() - createdAt.getTime() <= 7 * 24 * 60 * 60 * 1000;
+}
+
 async function createAuditLog({
   action,
   actorUserId,
@@ -72,6 +76,10 @@ export async function PUT(
 
     if (!order) {
       throw new ApiError(404, "El pedido seleccionado no existe.");
+    }
+
+    if (!isWithinEditWindow(order.createdAt)) {
+      throw new ApiError(409, "La ventana para editar este pedido ya venció. Solo se permite dentro de los 7 días posteriores a la carga.");
     }
 
     await db.order.update({

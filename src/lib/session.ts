@@ -89,6 +89,10 @@ export function canCreateSales(role: SessionUser["role"]) {
   return role === "owner" || role === "manager" || role === "staff";
 }
 
+export function canEditSales(role: SessionUser["role"]) {
+  return role === "owner";
+}
+
 export function canCreateOrders(role: SessionUser["role"]) {
   return role === "owner" || role === "manager" || role === "staff";
 }

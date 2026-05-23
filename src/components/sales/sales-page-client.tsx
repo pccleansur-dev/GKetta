@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { createPortal } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
 
 import { FeedbackBanner } from "@/components/ui/feedback-banner";
@@ -10,9 +9,14 @@ import { formatCurrency } from "@/lib/format";
 type SaleSummary = {
   id: string;
   date: string;
+  saleDate: string;
+  createdAt: string;
   description: string;
   amount: number;
   method: string;
+  relatedOrderId: string | null;
+  editable: boolean;
+  deletable: boolean;
   payments: { method: string; amount: number }[];
 };
 
@@ -22,6 +26,7 @@ type OperationMode = "sale" | "order";
 
 type SalesPageClientProps = {
   canCreate: boolean;
+  canEdit: boolean;
   initialPanel?: "new" | null;
   initialMode?: OperationMode;
 };
@@ -59,7 +64,7 @@ const MIXED_OPTIONS = [
 
 type MixedPart = { method: string; amount: string };
 
-export function SalesPageClient({ canCreate, initialPanel = null, initialMode = "sale" }: SalesPageClientProps) {
+export function SalesPageClient({ canCreate, canEdit, initialPanel = null, initialMode = "sale" }: SalesPageClientProps) {
   const router = useRouter();
   const pathname = usePathname();
 
@@ -72,11 +77,11 @@ export function SalesPageClient({ canCreate, initialPanel = null, initialMode = 
   const [methodFilter, setMethodFilter] = useState<(typeof METHOD_FILTERS)[number]>("all");
 
   // Panel state
-  const [panel, setPanel] = useState<"new" | null>(() =>
+  const [panel, setPanel] = useState<"new" | "edit" | null>(() =>
     initialPanel === "new" && canCreate ? "new" : null,
   );
+  const [editingSale, setEditingSale] = useState<SaleSummary | null>(null);
   const [operationMode, setOperationMode] = useState<OperationMode>(initialMode);
-  const [mounted, setMounted] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [notice, setNotice] = useState<string>();
   const [error, setError] = useState<string>();
@@ -85,6 +90,9 @@ export function SalesPageClient({ canCreate, initialPanel = null, initialMode = 
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [mixedParts, setMixedParts] = useState<MixedPart[]>([{ method: "cash", amount: "" }]);
   const [totalAmount, setTotalAmount] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editSaleDate, setEditSaleDate] = useState("");
+  const [editAmount, setEditAmount] = useState("");
 
   // Inline new customer
   const [showNewCustomer, setShowNewCustomer] = useState(false);
@@ -113,10 +121,6 @@ export function SalesPageClient({ canCreate, initialPanel = null, initialMode = 
   const needsCustomer = paymentMethod === "account" ||
     (paymentMethod === "mixed" && mixedParts.some((p) => p.method === "account" && parseFloat(p.amount) > 0));
 
-  useEffect(() => { setMounted(true); }, []);
-
-  function roundMoney(v: number) { return Math.round(v * 100) / 100; }
-
   function addMixedPart() {
     const next = MIXED_OPTIONS.find((o) => !usedMethods.has(o.value));
     if (next) setMixedParts((prev) => [...prev, { method: next.value, amount: "" }]);
@@ -139,6 +143,10 @@ export function SalesPageClient({ canCreate, initialPanel = null, initialMode = 
 
   function closePanel() {
     setPanel(null);
+    setEditingSale(null);
+    setEditDescription("");
+    setEditSaleDate("");
+    setEditAmount("");
     router.replace(pathname, { scroll: false });
   }
 
@@ -167,6 +175,10 @@ export function SalesPageClient({ canCreate, initialPanel = null, initialMode = 
 
   function openCreatePanel(mode: OperationMode = "sale") {
     setError(undefined);
+    setEditingSale(null);
+    setEditDescription("");
+    setEditSaleDate("");
+    setEditAmount("");
     setOperationMode(mode);
     setPaymentMethod("cash");
     setMixedParts([{ method: "cash", amount: "" }]);
@@ -181,6 +193,15 @@ export function SalesPageClient({ canCreate, initialPanel = null, initialMode = 
     setNewCustomerPhone("");
     setNewCustomerId("");
     setPanel("new");
+  }
+
+  function openEditPanel(sale: SaleSummary) {
+    setError(undefined);
+    setEditingSale(sale);
+    setEditDescription(sale.description);
+    setEditSaleDate(sale.saleDate);
+    setEditAmount(sale.amount.toFixed(2));
+    setPanel("edit");
   }
 
   async function submitSale(formData: FormData) {
@@ -208,6 +229,51 @@ export function SalesPageClient({ canCreate, initialPanel = null, initialMode = 
     const data = (await res.json().catch(() => null)) as { error?: string; message?: string } | null;
     if (!res.ok) { setError(data?.error ?? "No se pudo registrar la venta."); return; }
     setNotice(data?.message ?? "Venta registrada correctamente.");
+    closePanel();
+    await fetchSales();
+  }
+
+  async function submitSaleEdit() {
+    if (!editingSale) return;
+
+    const res = await fetch(`/api/sales/${editingSale.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        amount: editAmount,
+        description: editDescription,
+        saleDate: editSaleDate,
+      }),
+    });
+
+    const data = (await res.json().catch(() => null)) as { error?: string; message?: string } | null;
+    if (!res.ok) {
+      setError(data?.error ?? "No se pudo actualizar la venta.");
+      return;
+    }
+
+    setNotice(data?.message ?? "Venta actualizada correctamente.");
+    closePanel();
+    await fetchSales();
+  }
+
+  async function submitSaleDelete() {
+    if (!editingSale) return;
+
+    const confirmed = window.confirm("¿Querés anular esta venta? Se revertirá su impacto en caja y cuenta corriente.");
+    if (!confirmed) return;
+
+    const res = await fetch(`/api/sales/${editingSale.id}`, {
+      method: "DELETE",
+    });
+
+    const data = (await res.json().catch(() => null)) as { error?: string; message?: string } | null;
+    if (!res.ok) {
+      setError(data?.error ?? "No se pudo anular la venta.");
+      return;
+    }
+
+    setNotice(data?.message ?? "Venta anulada correctamente.");
     closePanel();
     await fetchSales();
   }
@@ -264,11 +330,6 @@ export function SalesPageClient({ canCreate, initialPanel = null, initialMode = 
     }
     void load();
     return () => { active = false; };
-  }, []);
-
-  useEffect(() => {
-    if (initialPanel === "new" && canCreate) openCreatePanel(initialMode);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const total = sales.reduce((sum, s) => sum + s.amount, 0);
@@ -357,21 +418,37 @@ export function SalesPageClient({ canCreate, initialPanel = null, initialMode = 
                   </div>
                 )}
               </div>
-              <p className="text-2xl font-semibold tracking-[-0.03em] text-[var(--success)]">{formatCurrency(sale.amount)}</p>
+              <div className="flex flex-col items-start gap-2 sm:items-end">
+                <p className="text-2xl font-semibold tracking-[-0.03em] text-[var(--success)]">{formatCurrency(sale.amount)}</p>
+                {canEdit && sale.editable && (
+                  <button
+                    type="button"
+                    onClick={() => openEditPanel(sale)}
+                    className="rounded-full border border-[var(--border-soft)] px-3 py-1.5 text-xs font-semibold text-[var(--text-secondary)] transition hover:border-[var(--border-strong)] hover:text-[var(--text-primary)]"
+                  >
+                    Corregir venta
+                  </button>
+                )}
+                {canEdit && !sale.editable && (
+                  <span className="rounded-full border border-[var(--border-soft)] px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-muted)]">
+                    Vencida
+                  </span>
+                )}
+              </div>
             </article>
           ))
         )}
       </section>
 
-      {mounted && panel && createPortal(
+      {panel && (
         <div className="overlay-panel-shell">
           <button aria-label="Cerrar panel" className="overlay-panel-dismiss" onClick={closePanel} />
           <section role="dialog" aria-modal="true" className="overlay-panel">
             <div className="overlay-panel-header">
               <div>
-                <p className="section-kicker">Nueva operación</p>
+                <p className="section-kicker">{panel === "edit" ? "Corrección de venta" : "Nueva operación"}</p>
                 <h2 className="mt-1 text-xl font-semibold tracking-[-0.03em] text-[var(--text-primary)] sm:text-2xl">
-                  Registrar venta
+                  {panel === "edit" ? "Corregir venta" : "Registrar venta"}
                 </h2>
               </div>
               <button onClick={closePanel}
@@ -381,7 +458,127 @@ export function SalesPageClient({ canCreate, initialPanel = null, initialMode = 
               </button>
             </div>
 
-            {!canCreate ? (
+            {panel === "edit" ? (
+              !canEdit ? (
+                <p className="rounded-[22px] border border-[var(--border-soft)] px-4 py-3 text-sm text-[var(--text-secondary)]">
+                  Tu perfil no tiene permiso para corregir ventas.
+                </p>
+              ) : !editingSale ? (
+                <p className="rounded-[22px] border border-[var(--border-soft)] px-4 py-3 text-sm text-[var(--text-secondary)]">
+                  No se encontró la venta seleccionada.
+                </p>
+              ) : (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    setError(undefined);
+                    startTransition(async () => {
+                      await submitSaleEdit();
+                    });
+                  }}
+                  className="overlay-panel-form"
+                >
+                    <div className="space-y-4">
+                      <div className="rounded-[22px] border border-[var(--border-soft)] bg-[rgba(13,15,14,0.68)] p-4">
+                        <p className="text-sm font-semibold text-[var(--text-primary)]">{editingSale.description}</p>
+                        <p className="mt-1 text-sm text-[var(--text-secondary)]">
+                          {editingSale.date} · {PAYMENT_LABELS[editingSale.method] ?? editingSale.method}
+                        </p>
+                        <p className="mt-3 text-sm text-[var(--text-secondary)]">
+                          Monto actual: <span className="font-semibold text-[var(--text-primary)]">{formatCurrency(editingSale.amount)}</span>
+                        </p>
+                      </div>
+
+                    <div>
+                      <label className="field-label" htmlFor="editDescription">
+                        Descripción
+                      </label>
+                      <input
+                        id="editDescription"
+                        name="editDescription"
+                        type="text"
+                        required
+                        value={editDescription}
+                        onChange={(e) => setEditDescription(e.target.value)}
+                        className="field-input"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="field-label" htmlFor="editSaleDate">
+                        Fecha
+                      </label>
+                      <input
+                        id="editSaleDate"
+                        name="editSaleDate"
+                        type="date"
+                        required
+                        value={editSaleDate}
+                        onChange={(e) => setEditSaleDate(e.target.value)}
+                        className="field-input"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="field-label" htmlFor="editAmount">
+                        Nuevo importe
+                      </label>
+                      <input
+                        id="editAmount"
+                        name="editAmount"
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        required
+                        value={editAmount}
+                        onChange={(e) => setEditAmount(e.target.value)}
+                        className="field-input"
+                      />
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <span className="rounded-full border border-[var(--border-soft)] px-3 py-1 text-xs font-semibold text-[var(--text-muted)]">
+                        Caja / cuenta
+                      </span>
+                      {editingSale.deletable ? (
+                        <span className="rounded-full border border-[rgba(184,90,90,0.22)] px-3 py-1 text-xs font-semibold text-[var(--danger)]">
+                          Anulable
+                        </span>
+                      ) : (
+                        <span className="rounded-full border border-[var(--border-soft)] px-3 py-1 text-xs font-semibold text-[var(--text-muted)]">
+                          Solo pedidos
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="overlay-panel-actions">
+                    <button
+                      type="submit"
+                      disabled={isPending}
+                      className="rounded-full bg-[var(--primary)] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[var(--primary-dark)] disabled:cursor-not-allowed disabled:opacity-70"
+                      >
+                        {isPending ? "Guardando..." : "Guardar corrección"}
+                      </button>
+                    {editingSale.deletable && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setError(undefined);
+                          startTransition(async () => {
+                            await submitSaleDelete();
+                          });
+                        }}
+                        disabled={isPending}
+                        className="rounded-full border border-[rgba(184,90,90,0.35)] px-4 py-3 text-sm font-semibold text-[var(--danger)] transition hover:border-[rgba(184,90,90,0.55)] hover:bg-[rgba(184,90,90,0.08)] disabled:cursor-not-allowed disabled:opacity-70"
+                      >
+                        {isPending ? "Anulando..." : "Anular venta"}
+                      </button>
+                    )}
+                  </div>
+                </form>
+              )
+            ) : !canCreate ? (
               <p className="rounded-[22px] border border-[var(--border-soft)] px-4 py-3 text-sm text-[var(--text-secondary)]">
                 Tu perfil no tiene permiso para registrar ventas.
               </p>
@@ -645,8 +842,7 @@ export function SalesPageClient({ canCreate, initialPanel = null, initialMode = 
               </>
             )}
           </section>
-        </div>,
-        document.body
+        </div>
       )}
     </main>
   );

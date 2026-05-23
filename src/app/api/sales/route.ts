@@ -169,6 +169,7 @@ export async function POST(request: Request) {
           data: {
             accountId: customerAccount.id,
             customerId: relatedCustomerId!,
+            relatedSaleId: newSale.id,
             movementType: MovementType.charge,
             amount: accountTotal,
             description,

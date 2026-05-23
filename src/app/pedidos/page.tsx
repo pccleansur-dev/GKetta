@@ -1,6 +1,7 @@
 import { OrdersPageClient } from "@/components/orders/orders-page-client";
 import { DashboardShell } from "@/components/layout/dashboard-shell";
 import { canCreateOrders, canEditOrders, requireSessionUser } from "@/lib/session";
+import { getOrderEditData } from "@/server/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,7 @@ export default async function PedidosPage({ searchParams }: PageProps) {
   const panelParam = readSingle(params?.panel);
   const orderId = readSingle(params?.orderId);
   const panel = panelParam === "edit" ? "edit" : null;
+  const initialOrderDetail = panel === "edit" && orderId ? await getOrderEditData(orderId) : null;
 
   return (
     <DashboardShell>
@@ -26,6 +28,7 @@ export default async function PedidosPage({ searchParams }: PageProps) {
         canEdit={canEditOrders(currentUser.role)}
         initialPanel={panel}
         initialOrderId={orderId ?? null}
+        initialOrderDetail={initialOrderDetail}
       />
     </DashboardShell>
   );

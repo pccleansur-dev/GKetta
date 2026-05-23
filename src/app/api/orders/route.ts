@@ -211,6 +211,7 @@ export async function POST(request: Request) {
           data: {
             accountId: account.id,
             customerId,
+            relatedSaleId: sale.id,
             movementType: MovementType.charge,
             amount: remainingBalance,
             description: `Venta a cuenta - pedido ${productName}`,
