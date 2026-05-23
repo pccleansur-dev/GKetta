@@ -17,4 +17,5 @@ export const navItems: NavItem[] = [
   { href: "/recordatorios", label: "Recordatorios" },
   { href: "/usuarios", label: "Usuarios", roles: ["owner"] },
   { href: "/auditoria", label: "Auditoría", roles: ["owner", "manager"] },
+  { href: "/sistema", label: "Sistema", roles: ["owner"] },
 ];
